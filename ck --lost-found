@@ -1,0 +1,73 @@
+[33m54017a3[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfeature/chat-fix[m[33m)[m HEAD@{0}: commit: Added admin and employee login/register images + AdminPolicy page
+[33m1738bdc[m[33m ([m[1;31morigin/feature/chat-fix[m[33m)[m HEAD@{1}: checkout: moving from main to feature/chat-fix
+[33m8e7d5a9[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m HEAD@{2}: reset: moving to origin/main
+[33m1738bdc[m[33m ([m[1;31morigin/feature/chat-fix[m[33m)[m HEAD@{3}: reset: moving to HEAD
+[33m1738bdc[m[33m ([m[1;31morigin/feature/chat-fix[m[33m)[m HEAD@{4}: reset: moving to origin/feature/chat-fix
+[33md4bc56b[m HEAD@{5}: reset: moving to HEAD
+[33md4bc56b[m HEAD@{6}: reset: moving to HEAD
+[33md4bc56b[m HEAD@{7}: pull origin chatversion-restored: Merge made by the 'ort' strategy.
+[33m8e7d5a9[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m HEAD@{8}: commit: update index
+[33m234cfb9[m HEAD@{9}: commit: employee page reload solve
+[33m0102643[m HEAD@{10}: commit: update ui/server
+[33m41095ed[m HEAD@{11}: commit: api changes
+[33m187e537[m HEAD@{12}: commit: update code full working
+[33mddb937c[m HEAD@{13}: commit: update code
+[33mcc46574[m HEAD@{14}: commit: changes ui,admin,prifilled data
+[33m2dac9f7[m HEAD@{15}: commit: changes attendance page
+[33m18cbf85[m HEAD@{16}: commit: changes attendance page
+[33meff3d18[m HEAD@{17}: commit: update index
+[33m21b4433[m HEAD@{18}: commit: reports salary
+[33m5e5b4e9[m HEAD@{19}: commit: update code env
+[33m0a2a9c3[m HEAD@{20}: pull --tags origin main: Merge made by the 'ort' strategy.
+[33m819bab9[m HEAD@{21}: commit: update code controllers
+[33m0052df0[m HEAD@{22}: commit: changes package
+[33m9309f85[m HEAD@{23}: commit: update code
+[33mb171eff[m HEAD@{24}: commit: change code
+[33mabeabb4[m HEAD@{25}: commit: change code
+[33m569a16b[m HEAD@{26}: commit: change code
+[33m6dfd2cc[m HEAD@{27}: commit: change code
+[33mba4abc7[m HEAD@{28}: commit: change code
+[33m0f287cd[m HEAD@{29}: commit: change code
+[33m27b6b33[m HEAD@{30}: commit: change code
+[33m13b0bd1[m HEAD@{31}: commit: change code
+[33md2514e7[m HEAD@{32}: commit: change index
+[33m90195c4[m HEAD@{33}: commit: changes server
+[33mc2730e1[m HEAD@{34}: commit: changes server
+[33m8f9f63c[m HEAD@{35}: commit: changes client
+[33m1b9f43d[m HEAD@{36}: commit: changes server
+[33m62be925[m HEAD@{37}: commit: changes server
+[33mf86cbbb[m HEAD@{38}: commit: changes p
+[33m9dfad40[m HEAD@{39}: commit: changes
+[33mea66a9b[m HEAD@{40}: commit: aad depe
+[33m2666d94[m HEAD@{41}: commit: aad build
+[33mbdd4b32[m HEAD@{42}: commit: update
+[33m4a922f8[m HEAD@{43}: commit: new changes
+[33m31d3c49[m HEAD@{44}: commit: commit
+[33m23990e9[m HEAD@{45}: pull --tags origin main: Merge made by the 'ort' strategy.
+[33m5711055[m HEAD@{46}: commit: commit
+[33m9b1acf3[m HEAD@{47}: commit: build
+[33m8c27702[m HEAD@{48}: pull --tags origin main: Merge made by the 'ort' strategy.
+[33mea02892[m HEAD@{49}: commit: aad build
+[33mb83d30d[m HEAD@{50}: commit: add vite config
+[33m0bfae3e[m HEAD@{51}: commit: error find
+[33m7dc87a1[m HEAD@{52}: commit: update build
+[33mea115ad[m HEAD@{53}: commit: update route
+[33m28c868c[m HEAD@{54}: commit: update index.js
+[33m3059ab3[m HEAD@{55}: commit: update index.js
+[33meb2de4d[m HEAD@{56}: commit: update index.js
+[33m9aff15e[m HEAD@{57}: commit: add feature admin a admin b
+[33m8032af7[m HEAD@{58}: commit: add update
+[33mc3d7469[m HEAD@{59}: commit: update ui
+[33m7edf939[m HEAD@{60}: commit: add
+[33m69a54de[m HEAD@{61}: commit: add
+[33m7183405[m HEAD@{62}: commit: add
+[33me0cd222[m HEAD@{63}: commit: add
+[33m8ec25fc[m HEAD@{64}: commit: add
+[33m00f4622[m HEAD@{65}: commit: Frontend ready for Render
+[33m4143054[m HEAD@{66}: commit: start cmd
+[33mb0ac0c5[m HEAD@{67}: commit: hr management
+[33mc5c0f93[m HEAD@{68}: commit: //hr-management
+[33m18f27c9[m HEAD@{69}: commit: update code
+[33mbf25036[m HEAD@{70}: commit: update code
+[33m2a39ce8[m HEAD@{71}: Branch: renamed refs/heads/master to refs/heads/main
+[33m2a39ce8[m HEAD@{73}: commit (initial): hr management
