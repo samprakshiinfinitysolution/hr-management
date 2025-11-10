@@ -4,6 +4,7 @@
 import Admin from "../models/adminModel.js";
 import Employee from "../models/employeeModel.js";
 import Attendance from "../models/attendanceModel.js";
+import Leave from "../models/leaveModel.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { jwtSecret } from "../config/config.js"; // Assuming you have this file
@@ -258,11 +259,16 @@ export const getAdminDashboardData = async (req, res) => {
     const late = todayAttendance.filter(a => a.status === "Late" || a.status === "Late Login").length;
     const absent = totalEmployees - todayAttendance.length;
 
+    // Count pending leaves for employees in scope
+    const pendingLeaveCount = await Leave.countDocuments({
+      employeeId: { $in: employeeIdsInScope },
+      status: "Pending",
+    });
+
     res.json({
       totalEmployees,
       attendance: { total: totalEmployees, onTime, late, absent },
-      // You can add leave reports here if needed in the future
-      // leaves: { pending: pendingLeaves },
+      pendingLeaveCount,
     });
   } catch (error) {
     res.status(500).json({ message: "Error fetching dashboard data", error: error.message });

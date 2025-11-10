@@ -73,9 +73,9 @@ export default function EmpAttendance() {
       const normalized = arr.map((r) => ({
         ...r,
         date: r.date ? r.date : r.attendanceDate ? r.attendanceDate : null,
-        login: r.login || r.checkIn || null,
-        lunchStart: r.lunchStartTime || null,
-        lunchEnd: r.lunchEndTime || null,
+        login: r.checkIn ? new Date(r.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
+        lunchStart: r.lunchStartTime ? new Date(r.lunchStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
+        lunchEnd: r.lunchEndTime ? new Date(r.lunchEndTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
         logout: r.logout || r.checkOut || null,
       }));
 

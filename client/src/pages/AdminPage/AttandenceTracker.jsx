@@ -24,6 +24,8 @@ const AttendanceTable = ({ records, loading, userType, onRowClick }) => {
             <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>
             <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Check-In</th>
             <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Check-Out</th>
+            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Lunch Start</th>
+            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Lunch End</th>
             <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider rounded-tr-lg">Actions</th>
           </tr>
         </thead>
@@ -42,6 +44,8 @@ const AttendanceTable = ({ records, loading, userType, onRowClick }) => {
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm">{record.avgCheckIn}</td>
               <td className="px-6 py-4 whitespace-nowrap text-sm">{record.avgCheckOut}</td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm">{record.lunchStartTime}</td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm">{record.lunchEndTime}</td>
               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                 <button onClick={() => onRowClick(record)} className="text-blue-600 hover:text-blue-900">
                   <Visibility fontSize="small" />
@@ -79,7 +83,7 @@ const AttendanceTracker = () => {
       setLoading(true);
       try {
         const formattedDate = dayjs(date).format("YYYY-MM-DD");
-        // 1. Fetch all employees
+        // 1. Fetch all employees under the current admin's scope
         const employeesRes = await API.get("/admin/employees");
         const allEmployees = employeesRes.data;
 
@@ -100,6 +104,8 @@ const AttendanceTracker = () => {
               email: emp.email,
               phone: emp.phone,
               avgCheckIn: attendance.checkIn ? dayjs(attendance.checkIn).format("HH:mm") : "-",
+              lunchStartTime: attendance.lunchStartTime ? dayjs(attendance.lunchStartTime).format("HH:mm") : "-",
+              lunchEndTime: attendance.lunchEndTime ? dayjs(attendance.lunchEndTime).format("HH:mm") : "-",
               avgCheckOut: attendance.checkOut ? dayjs(attendance.checkOut).format("HH:mm") : "-",
               status: attendance.status || "Present", // Default to Present if record exists
             };
@@ -123,7 +129,7 @@ const AttendanceTracker = () => {
       setLoading(true);
       try {
         // 1. Fetch all sub-admins (HRs/Managers)
-        const subAdminsRes = await API.get("/admin/sub-admins");
+        const subAdminsRes = await API.get("/admin/sub-admins"); // This should be scoped by backend
         const allSubAdmins = subAdminsRes.data;
 
         // 2. Fetch all admin attendance records for the day
@@ -139,6 +145,8 @@ const AttendanceTracker = () => {
               ...admin,
               id: admin._id,
               avgCheckIn: attendance.checkIn ? dayjs(attendance.checkIn).format("HH:mm") : "-",
+              lunchStartTime: attendance.lunchStartTime ? dayjs(attendance.lunchStartTime).format("HH:mm") : "-",
+              lunchEndTime: attendance.lunchEndTime ? dayjs(attendance.lunchEndTime).format("HH:mm") : "-",
               avgCheckOut: attendance.checkOut ? dayjs(attendance.checkOut).format("HH:mm") : "-",
               status: attendance.status || "Present",
             };
@@ -271,6 +279,8 @@ const AttendanceTracker = () => {
               <p><strong>Role:</strong> {selectedEmployee.role}</p>
               {selectedEmployee.joinDate && <p><strong>Join Date:</strong> {selectedEmployee.joinDate}</p>}
               <p className="flex items-center gap-2"><Email fontSize="small" /> <strong>Email:</strong> {selectedEmployee.email}</p>
+              {selectedEmployee.lunchStartTime && <p><strong>Lunch Start:</strong> {selectedEmployee.lunchStartTime}</p>}
+              {selectedEmployee.lunchEndTime && <p><strong>Lunch End:</strong> {selectedEmployee.lunchEndTime}</p>}
               {selectedEmployee.phone && <p className="flex items-center gap-2"><Phone fontSize="small" /> <strong>Phone:</strong> {selectedEmployee.phone}</p>}
               <p><strong>Status:</strong> <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(selectedEmployee.status)}`}>{selectedEmployee.status}</span></p>
             </div>

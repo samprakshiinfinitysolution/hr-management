@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import API from "../utils/api";
-import { Cake, LogIn, LogOut, Clock } from "lucide-react";
+import { Cake, LogIn, LogOut, Clock, Coffee, Briefcase } from "lucide-react";
 import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
 
@@ -48,6 +48,26 @@ const AdminAttendanceWidget = () => {
     }
   };
 
+  const handleLunchStart = async () => {
+    try {
+      const res = await API.post("/attendance/admin/lunch-start");
+      toast.success(res.data.message);
+      await fetchTodayAttendance(); // refresh
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to start lunch break");
+    }
+  };
+
+  const handleLunchEnd = async () => {
+    try {
+      const res = await API.post("/attendance/admin/lunch-end");
+      toast.success(res.data.message);
+      await fetchTodayAttendance();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to end lunch break");
+    }
+  };
+
   return (
     // Use the same styling as other dashboard cards
     <div className={`p-6 rounded-lg shadow-md text-center ${useSelector((state) => state.settings.isDarkMode) ? "bg-gray-800 text-white" : "bg-white text-gray-900"}`}>
@@ -59,17 +79,31 @@ const AdminAttendanceWidget = () => {
         </div>
       ) : (
         // Show both buttons
-        <div className="flex gap-4 justify-center">
-          <button onClick={handleCheckIn} disabled={!!todayAttendance?.checkIn} className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed">
-            <LogIn size={18} /> Check In
-          </button>
-          <button onClick={handleCheckOut} disabled={!todayAttendance?.checkIn} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed">
-            <LogOut size={18} /> Check Out
-          </button>
-        </div>
+        <>
+          <div className="flex gap-4 justify-center">
+            <button onClick={handleCheckIn} disabled={!!todayAttendance?.checkIn} className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed">
+              <LogIn size={18} /> Check In
+            </button>
+            <button onClick={handleCheckOut} disabled={!todayAttendance?.checkIn || !!todayAttendance?.checkOut} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed">
+              <LogOut size={18} /> Check Out
+            </button>
+          </div>
+          <div className="flex gap-4 justify-center mt-4">
+            <button onClick={handleLunchStart} disabled={!todayAttendance?.checkIn || !!todayAttendance?.lunchStartTime || !!todayAttendance?.checkOut} className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:bg-gray-400 disabled:cursor-not-allowed">
+              <Coffee size={18} /> On Lunch
+            </button>
+            <button onClick={handleLunchEnd} disabled={!todayAttendance?.lunchStartTime || !!todayAttendance?.lunchEndTime || !!todayAttendance?.checkOut} className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 disabled:bg-gray-400 disabled:cursor-not-allowed">
+              <Briefcase size={18} /> Back to Work
+            </button>
+          </div>
+        </>
       )}
-      {todayAttendance?.checkIn && <p className="text-sm mt-2 text-gray-500">Checked In at: {new Date(todayAttendance.checkIn).toLocaleTimeString()}</p>}
-      {todayAttendance?.checkOut && <p className="text-sm mt-2 text-gray-500">Checked Out at: {new Date(todayAttendance.checkOut).toLocaleTimeString()}</p>}
+      <div className="text-sm mt-4 text-gray-500 grid grid-cols-2 gap-x-4 gap-y-1">
+        {todayAttendance?.checkIn && <p>Checked In: {new Date(todayAttendance.checkIn).toLocaleTimeString()}</p>}
+        {todayAttendance?.checkOut && <p>Checked Out: {new Date(todayAttendance.checkOut).toLocaleTimeString()}</p>}
+        {todayAttendance?.lunchStartTime && <p>Lunch Start: {new Date(todayAttendance.lunchStartTime).toLocaleTimeString()}</p>}
+        {todayAttendance?.lunchEndTime && <p>Lunch End: {new Date(todayAttendance.lunchEndTime).toLocaleTimeString()}</p>}
+      </div>
     </div>
   );
 };
@@ -97,6 +131,7 @@ export default function AdminHome() {
     const fetchDashboardData = async () => {
       try {
         const { data } = await API.get("/admin/dashboard");
+        console.log("Dashboard API Data:", data);
         setDashboard({
           totalEmployees: data.totalEmployees || 0,
           attendance: data.attendance || { total: 0, onTime: 0, absent: 0, late: 0 },

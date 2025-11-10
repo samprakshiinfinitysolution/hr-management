@@ -381,3 +381,104 @@ export const getSubAdminAttendance = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// ADMIN/HR/MANAGER — LUNCH START
+export const adminLunchStart = async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const now = moment().tz("Asia/Kolkata");
+    const dateOnly = new Date(now.format("YYYY-MM-DD"));
+    const timeStr = now.format("HH:mm");
+
+    const att = await Attendance.findOne({ user: adminId, date: dateOnly, userModel: "Admin" });
+    if (!att || !att.checkIn) {
+      return res.status(400).json({ message: "Please check-in first" });
+    }
+    if (att.lunchStartTime) {
+      return res.status(400).json({ message: "Lunch break already started" });
+    }
+
+    att.lunchStartTime = now.toDate();
+    await att.save();
+    res.json({ message: `Lunch break started at ${timeStr}`, att });
+  } catch (err) {
+    console.error("adminLunchStart error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ADMIN/HR/MANAGER — LUNCH END
+export const adminLunchEnd = async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const now = moment().tz("Asia/Kolkata");
+    const dateOnly = new Date(now.format("YYYY-MM-DD"));
+    const timeStr = now.format("HH:mm");
+
+    const att = await Attendance.findOne({ user: adminId, date: dateOnly, userModel: "Admin" });
+    if (!att || !att.lunchStartTime) {
+      return res.status(400).json({ message: "No lunch break started yet" });
+    }
+    if (att.lunchEndTime) {
+      return res.status(400).json({ message: "Lunch break already ended" });
+    }
+
+    att.lunchEndTime = now.toDate();
+    await att.save();
+    res.json({ message: `Back to work at ${timeStr}`, att });
+  } catch (err) {
+    console.error("adminLunchEnd error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+// EMPLOYEE — LUNCH START
+export const lunchStart = async (req, res) => {
+  try {
+    const employeeId = req.user.id;
+    const now = moment().tz("Asia/Kolkata");
+    const dateOnly = new Date(now.format("YYYY-MM-DD"));
+    const timeStr = now.format("HH:mm");
+
+    const att = await Attendance.findOne({ user: employeeId, date: dateOnly });
+    if (!att || !att.checkIn) {
+      return res.status(400).json({ message: "Please check-in before lunch break" });
+    }
+    if (att.lunchStartTime) {
+      return res.status(400).json({ message: "Lunch break already started" });
+    }
+
+    att.lunchStartTime = now.toDate();
+    await att.save();
+    res.json({ message: `Lunch break started at ${timeStr}`, att });
+  } catch (err) {
+    console.error("lunchStart error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// EMPLOYEE — LUNCH END
+export const lunchEnd = async (req, res) => {
+  try {
+    const employeeId = req.user.id;
+    const now = moment().tz("Asia/Kolkata");
+    const dateOnly = new Date(now.format("YYYY-MM-DD"));
+    const timeStr = now.format("HH:mm");
+
+    const att = await Attendance.findOne({ user: employeeId, date: dateOnly });
+    if (!att || !att.lunchStartTime) {
+      return res.status(400).json({ message: "No lunch break started yet" });
+    }
+    if (att.lunchEndTime) {
+      return res.status(400).json({ message: "Lunch break already ended" });
+    }
+
+    att.lunchEndTime = now.toDate();
+    await att.save();
+    res.json({ message: `Back to work at ${timeStr}`, att });
+  } catch (err) {
+    console.error("lunchEnd error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};

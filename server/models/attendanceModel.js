@@ -24,6 +24,8 @@ const attendanceSchema = new Schema(
     totalHours: { type: Number },
     status: { type: String }, // Present / Late / Absent / etc.
     remark: { type: String },
+    lunchStartTime: { type: Date },
+    lunchEndTime: { type: Date },
   },
   { timestamps: true }
 );
