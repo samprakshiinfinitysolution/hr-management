@@ -8,6 +8,7 @@ import {
   FileText,
   Calendar,
   MessageSquare,
+  BookText,
   Clock,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -117,6 +118,13 @@ export default function EmployeeDashboard() {
           title="Chat"
           text="Chat with your team"
           path="/employee/chat"
+        />
+        <Card
+          icon={<BookText />}
+          color="purple"
+          title="Policies"
+          text="View company policies"
+          path="/employee/policy"
         />
       </div>
     </div>

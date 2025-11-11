@@ -39,6 +39,7 @@ import EmpSalaryslip from "./pages/employeePage/EmpSalaryslip";
 import EmployeeSettings from "./pages/employeePage/EmpSetting";
 import EmployeeChat from "./pages/employeePage/EmployeeChat";
 import EmpEodReports from "./pages/employeePage/EmpEodReports";
+import EmpPolicy from "./pages/employeePage/EmpPolicy";
 // ... all imports
 
 function App() {
@@ -152,6 +153,7 @@ function App() {
           <Route path="leave" element={<EmpLeave />} />
           <Route path="profile" element={<EmpProfile />} />
           <Route path="chat" element={<EmployeeChat />} />
+          <Route path="policy" element={<EmpPolicy />} />
           <Route path="salary-slip" element={<EmpSalaryslip />} />
           <Route path="setting" element={<EmployeeSettings />} />
         </Route>

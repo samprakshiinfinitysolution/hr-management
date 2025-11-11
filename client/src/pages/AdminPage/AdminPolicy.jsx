@@ -12,7 +12,9 @@ export default function AdminPolicy() {
   const [isEditing, setIsEditing] = useState(false);
   const [policyToDelete, setPolicyToDelete] = useState(null);
 
-  const isMainAdmin = localStorage.getItem("isMainAdmin") === "true";
+  // Allow both 'admin' and 'hr' to manage policies
+  const userRole = localStorage.getItem("role");
+  const canManagePolicies = userRole === 'admin' || userRole === 'hr';
 
   useEffect(() => {
     fetchPolicies();
@@ -93,7 +95,7 @@ export default function AdminPolicy() {
         <h1 className="text-3xl font-bold flex items-center gap-3">
           <BookText size={28} /> Company Policies
         </h1>
-        {isMainAdmin && (
+        {canManagePolicies && (
           <button
             onClick={() => handleOpenModal()}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
@@ -111,7 +113,7 @@ export default function AdminPolicy() {
             <div key={policy._id} className="border rounded-lg shadow-sm">
               <div className="p-4 border-b flex justify-between items-center">
                 <h2 className="text-xl font-semibold">{policy.title}</h2>
-                {isMainAdmin && (
+                {canManagePolicies && (
                   <div className="flex gap-2">
                     <button onClick={() => handleOpenModal(policy)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-full"><Edit size={18} /></button>
                     <button onClick={() => setPolicyToDelete(policy)} className="p-2 text-red-600 hover:bg-red-100 rounded-full"><Trash2 size={18} /></button>
@@ -121,7 +123,7 @@ export default function AdminPolicy() {
               <div className="p-4 prose max-w-none" dangerouslySetInnerHTML={createMarkup(policy.content)} />
             </div>
           )) : (
-            <p className="text-center text-gray-500 py-8">No policies found. {isMainAdmin && "Click 'Add New Policy' to get started."}</p>
+            <p className="text-center text-gray-500 py-8">No policies found. {canManagePolicies && "Click 'Add New Policy' to get started."}</p>
           )}
         </div>
       )}
@@ -176,10 +178,10 @@ export default function AdminPolicy() {
         </div>
       )}
 
-      {!isMainAdmin && (
+      {!canManagePolicies && (
          <div className="mt-8 p-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 rounded-lg">
             <h4 className="font-bold flex items-center gap-2"><ShieldCheck size={16}/> Admin View</h4>
-            <p className="text-sm">You are viewing policies. Only the main administrator can add, edit, or delete policies.</p>
+            <p className="text-sm">You are viewing policies. Only the Main Admin or HR can add, edit, or delete policies.</p>
           </div>
       )}
     </div>
