@@ -30,7 +30,7 @@ export default function EmployeeChat() {
 
     if (user?._id) {
       setEmployeeId(user._id);
-      localStorage.setItem("employee", JSON.stringify(user));
+      // localStorage.setItem("employee", JSON.stringify(user)); // Removed: localStorage is updated during login
     } else if (stored?._id) {
       setEmployeeId(stored._id);
     }
@@ -39,17 +39,17 @@ export default function EmployeeChat() {
   // Load users list
   useEffect(() => {
     const endpoint = chatType === "admin" ? "/admins" : "/employees";
-    if (!employeeId) return; // 💡 Don't fetch until employeeId is available
+    if (!employeeId) return; // Don't fetch until employeeId is available
 
     setUsers([]);
     setSelectedUser(null);
 
     API.get(endpoint)
       .then((res) => {
-        setUsers(res.data.filter(u => u._id !== employeeId)); // Filter out self
+        setUsers(res.data.filter((u) => u._id !== employeeId)); // Filter out self
       })
       .catch(() => toast.error(`Failed to load ${chatType}s`));
-  }, [chatType, employeeId]);
+  }, [chatType, employeeId]); // Add employeeId to dependency array
 
   // Online users
   useEffect(() => {

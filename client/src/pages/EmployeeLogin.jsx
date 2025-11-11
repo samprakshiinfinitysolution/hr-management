@@ -35,7 +35,7 @@ function EmployeeLogin() {
 
       dispatch(
         loginSuccess({
-          user: { name: employee.name, email: employee.email, role: "employee" },
+          user: { _id: employee._id, name: employee.name, email: employee.email, role: "employee" }, // Include _id
           token,
         })
       );
