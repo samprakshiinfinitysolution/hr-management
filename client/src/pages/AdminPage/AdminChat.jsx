@@ -182,41 +182,66 @@ socket.emit("confirmRead", { messageIds: unreadIds, room });
   };
 
   // ✅ File upload handler
-  const handleFileChange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+ const handleFileChange = async (e) => {
+  toast.error("File upload is currently disabled.");
+  // const file = e.target.files[0];
+  // if (!file) return;
 
-    try {
-      toast.loading("Uploading file...", { id: "upload" });
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("senderId", adminId);
-      formData.append("receiverId", selectedUser._id);
+  // if (!adminId || !selectedUser?._id) {
+  //   toast.error("Cannot send file: missing sender or receiver ID");
+  //   e.target.value = "";
+  //   return;
+  // }
 
-      const token = localStorage.getItem("token");
-      const res = await API.post("/chat", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-          Authorization: `Bearer ${token}`,
-        },
-      });
+  // const token = localStorage.getItem("token");
+  // if (!token) {
+  //   toast.error("No auth token found");
+  //   e.target.value = "";
+  //   return;
+  // }
 
-      toast.dismiss("upload");
+  // try {
+  //   toast.loading("Uploading file...", { id: "upload" });
 
-      if (res.status === 201) {
-        const newMsg = res.data;
-        socket.emit("sendMessage", newMsg);
-        setMessages((prev) => [...prev, newMsg]);
-        toast.success("File sent");
-      } else toast.error("Failed to upload file");
-    } catch (err) {
-      console.error(err);
-      toast.dismiss("upload");
-      toast.error("Upload failed");
-    } finally {
-      e.target.value = "";
-    }
-  };
+  //   const formData = new FormData();
+  //   formData.append("senderId", adminId);
+  //   formData.append("receiverId", selectedUser._id);
+  //   formData.append("file", file);
+
+  //   console.log("Uploading file:", {
+  //     senderId: adminId,
+  //     receiverId: selectedUser._id,
+  //     fileName: file.name,
+  //     fileType: file.type,
+  //   });
+
+  //   const res = await API.post("/chat", formData, {
+  //     headers: {
+  //       "Content-Type": "multipart/form-data",
+  //       Authorization: `Bearer ${token}`,
+  //     },
+  //   });
+
+  //   toast.dismiss("upload");
+
+  //   if (res.status === 201) {
+  //     const newMsg = res.data;
+  //     socket.emit("sendMessage", newMsg);
+  //     setMessages((prev) => [...prev, newMsg]);
+  //     toast.success("File sent successfully");
+  //   } else {
+  //     console.error("Upload failed:", res.data);
+  //     toast.error("Failed to upload file");
+  //   }
+  // } catch (err) {
+  //   console.error("Upload error:", err.response?.data || err.message);
+  //   toast.dismiss("upload");
+  //   toast.error("Upload failed");
+  // } finally {
+  //   e.target.value = "";
+  // }
+};
+
 
   // ✅ Delete chat/message
   const confirmDeleteMessage = (msgId) => {
@@ -407,9 +432,9 @@ socket.emit("confirmRead", { messageIds: unreadIds, room });
                           {m.senderId === adminId && (
                             <span className="ml-1 flex items-center">
                               {m.isRead ? (
-                                <span className="text-blue-400 text-[11px]">✓✓</span>
+                                <span className="text-black text-[11px]">✓✓</span>
                               ) : (
-                                <span className="text-gray-300 text-[11px]">✓</span>
+                                <span className="text-white text-[11px]">✓</span>
                               )}
                             </span>
                           )}
@@ -431,7 +456,7 @@ socket.emit("confirmRead", { messageIds: unreadIds, room });
             </div>
 
             {/* Input */}
-            <div className="p-2 sm:p-3 flex items-center gap-2 border-t dark:border-gray-700 sticky bottom-0 z-20 bg-white dark:bg-gray-800">
+            <div className="p-2 sm:p-3 flex items-center gap-2 border-t dark:border-gray-700 sticky bottom-0 z-20">
               <div className="relative flex-shrink-0">
                 <button
                   onClick={() => document.getElementById("fileInput").click()}
@@ -471,7 +496,7 @@ socket.emit("confirmRead", { messageIds: unreadIds, room });
                     sendMessage();
                   }
                 }}
-                className="flex-1 min-w-0 border border-gray-300 dark:border-gray-700 p-2 rounded-lg text-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 min-w-0 border border-gray-300 p-2 rounded-lg text-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Type a message..."
               />
               <button
@@ -521,3 +546,5 @@ socket.emit("confirmRead", { messageIds: unreadIds, room });
   );
 }
 //ok no control
+
+
