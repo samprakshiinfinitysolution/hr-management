@@ -380,9 +380,6 @@ export const getSubAdminAttendance = async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
-<<<<<<< HEAD
-};
-=======
 };
 
 // ADMIN/HR/MANAGER — LUNCH START
@@ -485,4 +482,3 @@ export const lunchEnd = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
->>>>>>> origin/main

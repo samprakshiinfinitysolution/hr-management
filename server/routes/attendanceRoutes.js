@@ -11,13 +11,10 @@ import {
   adminCheckIn,
   adminCheckOut,
   getSubAdminAttendance,
-<<<<<<< HEAD
-=======
   adminLunchStart,
   adminLunchEnd,
   lunchStart,
   lunchEnd,
->>>>>>> origin/main
 } from "../controllers/attendanceController.js";
 
 const router = express.Router();
@@ -38,8 +35,6 @@ router.post("/admin/checkout", verifyToken, allowAdminHrManager, adminCheckOut);
 router.get("/admin/me", verifyToken, allowAdminHrManager, getMyAttendance); // For HR/Manager to get their own attendance
 router.get("/admin/all", verifyToken, adminOnly, getSubAdminAttendance);
 
-<<<<<<< HEAD
-=======
 // Employee Lunch
 router.post("/lunch-start", verifyToken, employeeOnly, lunchStart);
 router.post("/lunch-end", verifyToken, employeeOnly, lunchEnd);
@@ -48,5 +43,4 @@ router.post("/lunch-end", verifyToken, employeeOnly, lunchEnd);
 router.post("/admin/lunch-start", verifyToken, allowAdminHrManager, adminLunchStart);
 router.post("/admin/lunch-end", verifyToken, allowAdminHrManager, adminLunchEnd);
 
->>>>>>> origin/main
 export default router;
