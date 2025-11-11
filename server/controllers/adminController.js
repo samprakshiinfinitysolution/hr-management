@@ -275,7 +275,6 @@ export const getAdminDashboardData = async (req, res) => {
   }
 };
 
-
 export const getAllAdmins = async (req, res) => {
   try {
     const { createdBy } = req.query;

@@ -1,35 +1,35 @@
-// // frontend/src/socket/socket.js
-// import { io } from "socket.io-client";
-
-// const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5002";
-// export const socket = io(SOCKET_URL, { transports: ["websocket"] });
-
-// socket.on("connect", () => {
-//   console.log("Socket connected:", socket.id);
-// });
-// socket.on("connect_error", (err) => {
-//   console.error("Socket connect error:", err.message);
-// });
-// socket.on("disconnect", (reason) => {
-//   console.warn("Socket disconnected:", reason);
-// });
-
-// export default socket;
-
-
 import { io } from "socket.io-client";
 
-const SOCKET_URL = import.meta.env.VITE_API_URL || "http://localhost:5002";
+// 👇 Remove /api if your VITE_API_URL has it
+let BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5002";
 
-const socket = io(SOCKET_URL, {
-  transports: ["websocket", "polling"], 
-  reconnection: true,
+// Ensure no trailing '/api'
+if (BASE_URL.endsWith("/api")) {
+  BASE_URL = BASE_URL.replace("/api", "");
+}
+
+console.log("Connecting socket to:", BASE_URL);
+
+// ✅ Load user/admin info from localStorage
+let userData =
+  JSON.parse(localStorage.getItem("employee")) ||
+  JSON.parse(localStorage.getItem("admin")) ||
+  null;
+
+export const socket = io(BASE_URL, {
+  transports: ["websocket", "polling"],
   withCredentials: true,
-  path: "/socket.io/", // ✅ Explicitly set the path
+  auth: {
+    userId: userData?.id || userData?._id || null, // 👈 Pass userId to server
+  },
 });
 
-socket.on("connect", () => console.log("🟢 Connected to socket:", socket.id));
-socket.on("connect_error", (err) => console.error("❌ Socket error:", err.message));
-socket.on("disconnect", (reason) => console.warn("🔴 Socket disconnected:", reason));
-
-export default socket;
+socket.on("connect", () =>
+  console.log("✅ Connected to socket:", socket.id)
+);
+socket.on("connect_error", (err) =>
+  console.error("❌ Connection error:", err.message)
+);
+socket.on("disconnect", (reason) =>
+  console.warn("🔴 Disconnected from socket:", reason)
+);

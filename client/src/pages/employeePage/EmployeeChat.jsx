@@ -1,390 +1,158 @@
-// // frontend/src/components/chat/EmployeeChat.jsx
-// import { useEffect, useState, useRef } from "react";
-// import API from "../../utils/api";
-// import { useSelector } from "react-redux";
-// import toast from "react-hot-toast";
-// import { Trash2 } from "lucide-react";
-// import { socket } from "../../socket/socket.js"; // use shared socket
-
-// export default function EmployeeChat() {
-//   const [users, setUsers] = useState([]);
-//   const [chatType, setChatType] = useState("admin");
-//   const [selectedUser, setSelectedUser] = useState(null);
-//   const [messages, setMessages] = useState([]);
-//   const [message, setMessage] = useState("");
-//   const [employeeId, setEmployeeId] = useState(null);
-
-//   const [showDeleteModal, setShowDeleteModal] = useState(false);
-//   const [deleteTarget, setDeleteTarget] = useState(null);
-//   const [isDeleting, setIsDeleting] = useState(false);
-
-//   const user = useSelector((state) => state.auth?.user);
-//   const chatBoxRef = useRef(null);
-
-//   // Load employee id from redux or localStorage
-//   useEffect(() => {
-//     const stored = JSON.parse(localStorage.getItem("employee") || "null");
-//     if (user?.id) {
-//       setEmployeeId(user.id);
-//       localStorage.setItem("employee", JSON.stringify(user));
-//     } else if (stored?.id) {
-//       setEmployeeId(stored.id);
-//     } else {
-//       console.warn("No employee found (Redux + LocalStorage empty)");
-//     }
-//   }, [user]);
-
-//   // Fetch user list: admins or employees
-//   useEffect(() => {
-//     if (!employeeId) {
-//       setUsers([]);
-//       return;
-//     }
-//     const endpoint =
-//       chatType === "admin" ? "/employees/admins" : "/employees/chat-employees";
-//     setUsers([]);
-//     setSelectedUser(null);
-
-//     API.get(endpoint)
-//       .then((res) => {
-//         // filter out current user
-//         const list = (res.data || []).filter((u) => u._id !== employeeId);
-//         setUsers(list);
-//       })
-//       .catch((err) => {
-//         console.error("Fetch users error:", err.response?.data || err.message);
-//         toast.error(`Failed to load ${chatType}s`);
-//       });
-//   }, [chatType, employeeId]);
-
-//   // Join room & load messages when selectedUser changes
-//   useEffect(() => {
-//     if (!selectedUser || !employeeId) return;
-
-//     const roomId = [selectedUser._id, employeeId].sort().join("_");
-//     socket.emit("joinRoom", roomId);
-
-//     API.get(`/chat/${selectedUser._id}/${employeeId}`)
-//       .then((res) => {
-//         const sorted = (res.data || []).sort(
-//           (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
-//         );
-//         setMessages(sorted);
-//       })
-//       .catch((err) => {
-//         console.error("Load messages error:", err.response?.data || err.message);
-//         toast.error("Failed to load messages");
-//       });
-
-//     // Listener for incoming messages
-//     const onReceive = (msg) => {
-//       const valid =
-//         (msg.senderId === selectedUser._id && msg.receiverId === employeeId) ||
-//         (msg.senderId === employeeId && msg.receiverId === selectedUser._id);
-//       if (!valid) return;
-//       setMessages((prev) =>
-//         [...prev, msg].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-//       );
-//     };
-
-//     socket.on("receiveMessage", onReceive);
-
-//     return () => {
-//       socket.emit("leaveRoom", roomId);
-//       socket.off("receiveMessage", onReceive);
-//     };
-//   }, [selectedUser, employeeId]);
-
-//   // Auto-scroll when messages change
-//   useEffect(() => {
-//     const el = chatBoxRef.current;
-//     if (!el) return;
-//     el.scrollTop = el.scrollHeight;
-//   }, [messages]);
-
-//   // Send message
-//   const sendMessage = () => {
-//     if (!message.trim() || !selectedUser || !employeeId) return;
-
-//     const room = [selectedUser._id, employeeId].sort().join("_");
-//     const msgData = {
-//       room,
-//       senderId: employeeId,
-//       receiverId: selectedUser._id,
-//       message: message.trim(),
-//       createdAt: new Date().toISOString(),
-//     };
-
-//     // emit via socket (socket server saves to DB and emits to room)
-//     socket.emit("sendMessage", msgData);
-
-//     // Optimistic UI
-//     setMessages((prev) =>
-//       [...prev, msgData].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-//     );
-//     setMessage("");
-//   };
-
-//   // Delete message or entire chat
-//   const handleDelete = async () => {
-//     if (!deleteTarget) return;
-//     setIsDeleting(true);
-//     try {
-//       if (deleteTarget.type === "message") {
-//         await API.delete(`/chat/message/${deleteTarget.id}`);
-//         setMessages((prev) => prev.filter((m) => m._id !== deleteTarget.id));
-//       } else if (deleteTarget.type === "chat") {
-//         await API.delete(`/chat/${selectedUser._id}/${employeeId}`);
-//         setMessages([]);
-//       }
-//       toast.success("Deleted");
-//       setShowDeleteModal(false);
-//     } catch (err) {
-//       console.error("Delete failed:", err.response?.data || err.message);
-//       toast.error("Delete failed");
-//     } finally {
-//       setIsDeleting(false);
-//     }
-//   };
-
-//   return (
-//     <div className="flex flex-col md:flex-row h-[85vh] border rounded-xl overflow-hidden shadow-md">
-//       {/* SIDEBAR */}
-//       <div
-//         className={`w-full md:w-1/3 border-r p-4 bg-gray-50 dark:bg-gray-800 overflow-y-auto ${
-//           selectedUser ? "hidden md:block" : "block"
-//         }`}
-//       >
-//         <h2 className="text-lg font-semibold text-blue-600 mb-4 text-center md:text-left">
-//           Chat With
-//         </h2>
-
-//         <div className="flex justify-center gap-2 mb-4">
-//           <button
-//             onClick={() => setChatType("admin")}
-//             className={`px-4 py-2 rounded ${
-//               chatType === "admin"
-//                 ? "bg-blue-600 text-white"
-//                 : "bg-gray-200 dark:bg-gray-700"
-//             }`}
-//           >
-//             Admins
-//           </button>
-//           <button
-//             onClick={() => setChatType("employee")}
-//             className={`px-4 py-2 rounded ${
-//               chatType === "employee"
-//                 ? "bg-blue-600 text-white"
-//                 : "bg-gray-200 dark:bg-gray-700"
-//             }`}
-//           >
-//             Employees
-//           </button>
-//         </div>
-
-//         {users.length > 0 ? (
-//           <div className="space-y-2">
-//             {users.map((u) => (
-//               <div
-//                 key={u._id}
-//                 onClick={() => setSelectedUser(u)}
-//                 className={`p-3 cursor-pointer rounded-lg ${
-//                   selectedUser?._id === u._id
-//                     ? "bg-blue-600 text-white"
-//                     : "bg-white dark:bg-gray-700 hover:bg-gray-100"
-//                 }`}
-//               >
-//                 {u.name}
-//               </div>
-//             ))}
-//           </div>
-//         ) : (
-//           <p className="text-gray-500 text-sm text-center">No {chatType}s available</p>
-//         )}
-//       </div>
-
-//       {/* CHAT AREA */}
-//       <div className={`flex-1 flex flex-col ${!selectedUser ? "hidden md:flex" : "flex"}`}>
-//         {selectedUser ? (
-//           <>
-//             <div className="p-4 border-b flex justify-between items-center">
-//               <span className="font-semibold text-blue-600">Chat with {selectedUser.name}</span>
-//               <button
-//                 onClick={() => {
-//                   setDeleteTarget({ type: "chat" });
-//                   setShowDeleteModal(true);
-//                 }}
-//                 className="text-red-600 text-sm flex items-center gap-1"
-//               >
-//                 <Trash2 size={16} /> Delete Chat
-//               </button>
-//             </div>
-
-//             <div ref={chatBoxRef} className="flex-1 p-4 overflow-y-auto space-y-2 bg-gray-100 dark:bg-gray-900 chat-box">
-//               {messages.length ? (
-//                 messages.map((m, i) => (
-//                   <div
-//                     key={m._id || i}
-//                     className={`px-3 py-2 rounded-xl max-w-[70%] ${
-//                       m.senderId === employeeId ? "bg-blue-600 text-white self-end ml-auto" : "bg-gray-200 text-black self-start"
-//                     }`}
-//                   >
-//                     {m.message}
-//                   </div>
-//                 ))
-//               ) : (
-//                 <p className="text-gray-400 text-center">No messages yet</p>
-//               )}
-//             </div>
-
-//             <div className="p-3 flex gap-2 border-t">
-//               <input
-//                 value={message}
-//                 onChange={(e) => setMessage(e.target.value)}
-//                 onKeyDown={(e) => { if (e.key === "Enter") sendMessage(); }}
-//                 className="flex-1 p-2 border rounded-lg"
-//                 placeholder="Type a message..."
-//               />
-//               <button onClick={sendMessage} className="bg-blue-600 text-white px-5 py-2 rounded-lg">Send</button>
-//             </div>
-//           </>
-//         ) : (
-//           <div className="flex items-center justify-center h-full text-gray-500">Select a {chatType} to start chatting</div>
-//         )}
-
-//         {/* Delete Modal */}
-//         {showDeleteModal && (
-//           <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-//             <div className="bg-white p-5 rounded-lg shadow-xl text-center">
-//               <p className="mb-4 text-red-600 font-semibold">
-//                 {deleteTarget?.type === "chat" ? "Delete entire chat?" : "Delete this message?"}
-//               </p>
-//               <div className="flex justify-center gap-4">
-//                 <button onClick={() => setShowDeleteModal(false)} className="px-4 py-2 bg-gray-300 rounded-lg">Cancel</button>
-//                 <button onClick={handleDelete} className="px-4 py-2 bg-red-600 text-white rounded-lg">{isDeleting ? "Deleting..." : "Delete"}</button>
-//               </div>
-//             </div>
-//           </div>
-//         )}
-//       </div>
-//     </div>
-//   );
-// }
-
-
-
 import { useEffect, useState, useRef } from "react";
 import API from "../../utils/api";
 import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
 import { Trash2 } from "lucide-react";
-import socket from "../../socket/socket.js"; // ✅ default import
+import { socket } from "../../socket/socket.js";
 
 export default function EmployeeChat() {
   const [users, setUsers] = useState([]);
-  const [chatType, setChatType] = useState("admin"); // default show admins
+  const [chatType, setChatType] = useState("admin");
   const [selectedUser, setSelectedUser] = useState(null);
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
   const [employeeId, setEmployeeId] = useState(null);
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const user = useSelector((state) => state.auth?.user);
   const chatBoxRef = useRef(null);
+  const inputRef = useRef(null);
+  const [onlineUsers, setOnlineUsers] = useState([]);
 
-  // 🔹 Load employee ID from Redux or localStorage
-useEffect(() => {
-  const storedEmployee = JSON.parse(localStorage.getItem("employee") || "null");
-  const storedToken = localStorage.getItem("token");
-
-  if (user?.id) {
-    setEmployeeId(user.id);
-    localStorage.setItem("employee", JSON.stringify(user));
-  } else if (storedEmployee?.id) {
-    setEmployeeId(storedEmployee.id);
-  } else {
-    console.warn("⚠️ No employee found (Redux + LocalStorage empty)");
-    if (!storedToken) {
-      toast.error("Session expired. Please log in again.");
-    }
-  }
-}, [user]);
-
-
-
-  // 🔹 Fetch Admins or Employees list
+  // Load employee ID from user or localStorage
   useEffect(() => {
-    const fetchUsers = () => {
-      if (!employeeId) return; // Don't fetch if employeeId is not set
+    const storedRaw = localStorage.getItem("employee");
+    const stored = storedRaw ? JSON.parse(storedRaw) : null;
 
-      // Use the new centralized endpoints
-      const endpoint =
-        chatType === "admin"
-          ? "/admin/chat-admins-for-employee" // Fetches only admins
-          : "/admin/chat-users";   // Fetches all users, then we filter for employees
+    if (user?._id) {
+      setEmployeeId(user._id);
+      localStorage.setItem("employee", JSON.stringify(user));
+    } else if (stored?._id) {
+      setEmployeeId(stored._id);
+    }
+  }, [user]);
 
-      API.get(endpoint)
-        .then((res) => {
-          const allUsers = res.data || [];
-          // If chatType is 'employee', filter only employees from the full list
-          const filteredUsers = chatType === 'employee' 
-            ? allUsers.filter(u => u.userType === 'employee' && u._id !== employeeId)
-            : allUsers;
-          setUsers(filteredUsers);
-        })
-        .catch((err) => {
-          toast.error(`Failed to load ${chatType}s`);
-        });
-    };
-    fetchUsers();
-  }, [chatType, employeeId]);
-  // 🔹 Join room & load chat history
+  // Load users list
+  useEffect(() => {
+    const endpoint = chatType === "admin" ? "/admins" : "/employees";
+    setUsers([]);
+    setSelectedUser(null);
+
+    API.get(endpoint)
+      .then((res) => setUsers(res.data))
+      .catch(() => toast.error(`Failed to load ${chatType}s`));
+  }, [chatType]);
+
+  // Online users
+  useEffect(() => {
+    socket.on("onlineUsers", (users) => setOnlineUsers(users));
+    return () => socket.off("onlineUsers");
+  }, []);
+
+  // Join chat room & listen for messages
   useEffect(() => {
     if (!selectedUser || !employeeId) return;
 
     const roomId = [selectedUser._id, employeeId].sort().join("_");
     socket.emit("joinRoom", roomId);
 
-    // Load previous messages
+    socket.on("connect", () => console.log("✅ Socket connected:", socket.id));
+    socket.on("connect_error", (err) =>
+      console.error("❌ Socket connect error:", err.message)
+    );
+    socket.on("disconnect", (reason) =>
+      console.warn("🔴 Socket disconnected:", reason)
+    );
+
     API.get(`/chat/${selectedUser._id}/${employeeId}`)
       .then((res) => {
-        const sorted = (res.data || []).sort(
+        const sorted = res.data.sort(
           (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
         );
         setMessages(sorted);
       })
-      .catch((err) => {
-        console.error("Load messages error:", err.response?.data || err.message);
-        toast.error("Failed to load messages");
-      });
+      .catch(() => toast.error("Failed to load messages"));
 
-    // Listen for new messages
-    const onReceive = (msg) => {
-      const valid =
+    // ✅ Handle incoming message and double-check logic
+    socket.on("receiveMessage", (msg) => {
+      const validMsg =
         (msg.senderId === selectedUser._id && msg.receiverId === employeeId) ||
         (msg.senderId === employeeId && msg.receiverId === selectedUser._id);
-      if (!valid) return;
-      setMessages((prev) => [...prev, msg]);
-    };
 
-    socket.on("receiveMessage", onReceive);
+      if (!validMsg) return;
+
+      setMessages((prev) => {
+        const exists = prev.some(
+          (m) =>
+            m._id === msg._id ||
+            (m.message === msg.message &&
+              m.senderId === msg.senderId &&
+              Math.abs(new Date(m.createdAt) - new Date(msg.createdAt)) < 1000)
+        );
+        if (exists) return prev;
+        return [...prev, msg].sort(
+          (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+        );
+      });
+
+      // ✅ Mark delivered immediately if receiver is employee
+      if (msg.receiverId === employeeId) {
+        socket.emit("confirmDelivered", { messageId: msg._id, room: roomId });
+      }
+    });
+
+    // ✅ Update ticks when backend confirms delivery/read
+    socket.on("messageDelivered", ({ messageId }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m._id === messageId ? { ...m, isDelivered: true } : m))
+      );
+    });
+
+    socket.on("messageRead", ({ messageIds }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          messageIds.includes(m._id) ? { ...m, isRead: true } : m
+        )
+      );
+    });
 
     return () => {
       socket.emit("leaveRoom", roomId);
-      socket.off("receiveMessage", onReceive);
+      socket.off("receiveMessage");
+      socket.off("messageDelivered");
+      socket.off("messageRead");
     };
   }, [selectedUser, employeeId]);
 
-  // 🔹 Auto scroll to bottom
+  // ✅ Auto-scroll & focus
+  useEffect(() => {
+    if (inputRef.current) inputRef.current.focus();
+  }, [selectedUser]);
+
   useEffect(() => {
     const el = chatBoxRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  // 🔹 Send message
+  // ✅ Mark messages as read when employee opens chat
+  useEffect(() => {
+    if (!selectedUser || !employeeId || messages.length === 0) return;
+
+    const unreadIds = messages
+      .filter((m) => !m.isRead && m.receiverId === employeeId)
+      .map((m) => m._id);
+
+    if (unreadIds.length > 0) {
+      const room = [selectedUser._id, employeeId].sort().join("_");
+      console.log("📤 Employee confirmRead for:", unreadIds);
+      socket.emit("confirmRead", { messageIds: unreadIds, room });
+    }
+  }, [messages, selectedUser, employeeId]);
+
+  // Send message
   const sendMessage = () => {
     if (!message.trim() || !selectedUser || !employeeId) return;
 
@@ -393,65 +161,142 @@ useEffect(() => {
       room,
       senderId: employeeId,
       receiverId: selectedUser._id,
-      message: message.trim(),
+      message,
+      type: "text",
       createdAt: new Date().toISOString(),
     };
 
-    // Emit message via socket (server will save and broadcast)
     socket.emit("sendMessage", msgData);
-
-    // Optimistic UI
     setMessages((prev) => [...prev, msgData]);
     setMessage("");
   };
 
-  // 🔹 Delete chat or message
+  // File upload
+  const handleFileChange = async (e) => {
+    toast.error("File upload is currently disabled.");
+    // const file = e.target.files[0];
+    // if (!file) return;
+
+    // try {
+    //   toast.loading("Uploading file...", { id: "upload" });
+
+    //   const formData = new FormData();
+    //   formData.append("file", file);
+    //   formData.append("senderId", employeeId);
+    //   formData.append("receiverId", selectedUser._id);
+
+    //   const token = localStorage.getItem("token");
+
+    //   const res = await API.post("/chat", formData, {
+    //     headers: {
+    //       "Content-Type": "multipart/form-data",
+    //       Authorization: `Bearer ${token}`,
+    //     },
+    //   });
+
+    //   toast.dismiss("upload");
+
+    //   if (res.status === 201 || res.status === 200) {
+    //     const newMsg = res.data;
+    //     socket.emit("sendMessage", newMsg);
+    //     setMessages((prev) => [...prev, newMsg]);
+    //     toast.success("File sent");
+    //   } else toast.error("Failed to upload file");
+    // } catch (err) {
+    //   console.error("File upload error:", err);
+    //   toast.dismiss("upload");
+    //   toast.error("Upload failed");
+    // } finally {
+    //   e.target.value = "";
+    // }
+  };
+
+  // Delete handlers
+  const confirmDeleteMessage = (msgId) => {
+    setDeleteTarget({ type: "message", id: msgId });
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteChat = () => {
+    setDeleteTarget({ type: "chat" });
+    setShowDeleteModal(true);
+  };
+
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
+
     try {
-      if (deleteTarget.type === "chat") {
-        await API.delete(`/chat/${selectedUser._id}/${employeeId}`);
-        setMessages([]);
-      } else if (deleteTarget.type === "message") {
+      if (deleteTarget.type === "message") {
         await API.delete(`/chat/message/${deleteTarget.id}`);
         setMessages((prev) => prev.filter((m) => m._id !== deleteTarget.id));
+        toast.success("Message deleted");
+      } else if (deleteTarget.type === "chat" && selectedUser && employeeId) {
+        await API.delete(`/chat/${selectedUser._id}/${employeeId}`);
+        setMessages([]);
+        toast.success("Chat deleted");
       }
-      toast.success("Deleted");
-    } catch (err) {
-      console.error("Delete failed:", err.response?.data || err.message);
-      toast.error("Delete failed");
+      setShowDeleteModal(false);
+    } catch {
+      toast.error("Failed to delete");
     } finally {
       setIsDeleting(false);
-      setShowDeleteModal(false);
     }
   };
 
+  // Group messages
+  const groupedMessages = messages.reduce((groups, msg) => {
+    const key = new Date(msg.createdAt).toDateString();
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(msg);
+    return groups;
+  }, {});
+
+  const getDateLabel = (dateString) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const diff = Math.floor((today - date) / (1000 * 60 * 60 * 24));
+    if (diff === 0) return "Today";
+    if (diff === 1) return "Yesterday";
+    return date.toLocaleDateString([], {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  const formatTime = (isoString) =>
+    new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
   return (
-    <div className="flex flex-col md:flex-row h-[85vh] border rounded-xl overflow-hidden shadow-md">
+    <div className="flex flex-col md:flex-row h-[85vh] border rounded-xl overflow-hidden shadow-md transition-colors duration-300 max-w-full">
       {/* SIDEBAR */}
-      <div className="w-full md:w-1/3 border-r p-4 bg-gray-50 dark:bg-gray-800 overflow-y-auto">
-        <h2 className="text-lg font-semibold text-blue-600 mb-4 text-center">
+      <div
+        className={`w-full md:w-1/3 lg:w-1/4 border-r dark:border-gray-700 p-4 overflow-y-auto ${
+          selectedUser ? "hidden md:block" : "block"
+        }`}
+      >
+        <h2 className="font-semibold text-lg mb-4 text-blue-600 text-center md:text-left">
           Chat With
         </h2>
 
-        <div className="flex justify-center gap-2 mb-4">
+        <div className="flex justify-center md:justify-start mb-5 gap-2 flex-wrap">
           <button
             onClick={() => setChatType("admin")}
-            className={`px-4 py-2 rounded ${
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
               chatType === "admin"
                 ? "bg-blue-600 text-white"
-                : "bg-gray-200 dark:bg-gray-700"
+                : "border hover:bg-gray-200 hover:text-black cursor-pointer"
             }`}
           >
             Admins
           </button>
           <button
             onClick={() => setChatType("employee")}
-            className={`px-4 py-2 rounded ${
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
               chatType === "employee"
                 ? "bg-blue-600 text-white"
-                : "bg-gray-200 dark:bg-gray-700"
+                : "border hover:bg-gray-200 hover:text-black cursor-pointer"
             }`}
           >
             Employees
@@ -459,111 +304,184 @@ useEffect(() => {
         </div>
 
         {users.length > 0 ? (
-          users.map((u) => (
-            <div
-              key={u._id}
-              onClick={() => setSelectedUser(u)}
-              className={`p-3 cursor-pointer rounded-lg mb-2 ${
-                selectedUser?._id === u._id
-                  ? "bg-blue-600 text-white"
-                  : "bg-white dark:bg-gray-700 hover:bg-gray-100"
-              }`}
-            >
-              {u.name}
-            </div>
-          ))
+          <div className="space-y-2">
+            {users.map((u) => (
+              <div
+                key={u._id}
+                onClick={() => setSelectedUser(u)}
+                className={`p-3 cursor-pointer rounded-lg text-center md:text-left text-sm font-medium transition flex items-center gap-2 ${
+                  selectedUser?._id === u._id
+                    ? "bg-blue-600 text-white"
+                    : "border hover:bg-gray-200 hover:text-black"
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                    onlineUsers.includes(u._id)
+                      ? "bg-green-500"
+                      : "bg-red-500"
+                  }`}
+                  title={onlineUsers.includes(u._id) ? "Online" : "Offline"}
+                ></span>
+                <span>{u.name}</span>
+              </div>
+            ))}
+          </div>
         ) : (
-          <p className="text-center text-gray-500 text-sm">
+          <p className="text-gray-500 text-sm text-center">
             No {chatType}s available
           </p>
         )}
       </div>
 
       {/* CHAT AREA */}
-      <div className="flex-1 flex flex-col">
+      <div
+        className={`flex-1 flex flex-col relative w-full overflow-hidden ${
+          !selectedUser ? "hidden md:flex" : "flex"
+        }`}
+      >
         {selectedUser ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 border-b flex justify-between items-center">
-              <span className="font-semibold text-blue-600">
-                Chat with {selectedUser.name}
-              </span>
+            <div className="p-4 border-b dark:border-gray-700 font-semibold text-blue-600 flex justify-between items-center sticky top-0 z-10">
+              <span>Chat with {selectedUser.name}</span>
               <button
-                onClick={() => {
-                  setDeleteTarget({ type: "chat" });
-                  setShowDeleteModal(true);
-                }}
-                className="text-red-600 text-sm flex items-center gap-1"
+                onClick={confirmDeleteChat}
+                className="text-red-600 hover:text-red-800 flex items-center gap-1 text-sm"
               >
-                <Trash2 size={16} /> Delete Chat
+                <Trash2 size={18} /> Delete Chat
               </button>
             </div>
 
-            {/* Chat Messages */}
-            <div
-              ref={chatBoxRef}
-              className="flex-1 p-4 overflow-y-auto space-y-2 bg-gray-100 dark:bg-gray-900"
-            >
-              {messages.length ? (
-                messages.map((m, i) => (
-                  <div
-                    key={m._id || i}
-                    className={`px-3 py-2 rounded-xl max-w-[70%] ${
-                      m.senderId === employeeId
-                        ? "bg-blue-600 text-white ml-auto"
-                        : "bg-gray-200 text-black"
-                    }`}
-                  >
-                    {m.message}
+            {/* Messages */}
+            <div ref={chatBoxRef} className="flex-1 p-4 overflow-y-auto space-y-4">
+              {Object.keys(groupedMessages).map((dateKey) => (
+                <div key={dateKey}>
+                  <div className="text-center text-gray-500 text-xs my-3">
+                    {getDateLabel(dateKey)}
                   </div>
-                ))
-              ) : (
-                <p className="text-gray-400 text-center">No messages yet</p>
-              )}
+                  <div className="flex flex-col space-y-2">
+                    {groupedMessages[dateKey].map((m, i) => (
+                      <div
+                        key={m._id || i}
+                        className={`relative group px-3 pr-6 py-2 rounded-2xl max-w-[80%] md:max-w-[70%] break-words shadow-sm transition w-fit ${
+                          m.senderId === employeeId
+                            ? "bg-blue-600 text-white ml-auto self-end rounded-br-sm"
+                            : "bg-gray-200 text-black dark:bg-blue-900 dark:text-white self-start rounded-bl-sm"
+                        }`}
+                      >
+                        <p className="whitespace-pre-wrap break-words leading-snug pr-10">
+                          {m.message}
+                        </p>
+
+                        {/* Time + ticks */}
+                        <div className="absolute bottom-1 right-2 flex items-center gap-1 text-[10px] opacity-75">
+                          <span>{formatTime(m.createdAt)}</span>
+                          {m.senderId === employeeId && (
+                            <span>
+                              {!m.isDelivered && !m.isRead && (
+                                <span className="text-white">✓</span>
+                              )}
+                              {m.isDelivered && !m.isRead && (
+                                <span className="text-white">✓✓</span>
+                              )}
+                              {m.isRead && <span className="text-white">✓✓</span>}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Delete button */}
+                        {m.senderId === employeeId && m._id && (
+                          <button
+                            onClick={() => confirmDeleteMessage(m._id)}
+                            className="absolute top-1 right-1 hidden group-hover:block text-xs text-red-300 hover:text-red-800"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
 
-            {/* Input Box */}
-            <div className="p-3 flex gap-2 border-t">
+            {/* Input */}
+            <div className="p-2 sm:p-3 flex flex-wrap items-center gap-2 border-t dark:border-gray-700 sticky bottom-0 z-20">
+              <div className="relative flex-shrink-0">
+                <button
+                  onClick={() => document.getElementById("employeeFileInput").click()}
+                  className="p-2 bg-gray-200 dark:bg-gray-700 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                  title="Attach file"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.8}
+                    stroke="currentColor"
+                    className="w-5 h-5 text-gray-700 dark:text-gray-300"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
+                <input
+                  id="employeeFileInput"
+                  type="file"
+                  accept="image/*,.pdf,.docx,.xlsx"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+              </div>
+
               <input
+                ref={inputRef}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                className="flex-1 p-2 border rounded-lg"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                className="flex-1 min-w-[150px] border border-gray-300 dark:border-gray-700 p-2 rounded-lg text-sm sm:text-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Type a message..."
               />
+
               <button
                 onClick={sendMessage}
-                className="bg-blue-600 text-white px-5 py-2 rounded-lg"
+                className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-5 py-2 rounded-lg text-sm font-medium transition w-full sm:w-auto"
               >
                 Send
               </button>
             </div>
           </>
         ) : (
-          <div className="flex items-center justify-center h-full text-gray-500">
+          <div className="flex items-center justify-center h-full text-gray-500 text-center p-5 text-sm">
             Select a {chatType} to start chatting
           </div>
         )}
 
         {/* Delete Modal */}
         {showDeleteModal && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-            <div className="bg-white p-5 rounded-lg shadow-xl text-center">
-              <p className="mb-4 text-red-600 font-semibold">
-                {deleteTarget?.type === "chat"
-                  ? "Delete entire chat?"
-                  : "Delete this message?"}
-              </p>
-              <div className="flex justify-center gap-4">
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl w-full max-w-sm text-center">
+              <h3 className="text-lg font-semibold mb-3 text-red-600">
+                {deleteTarget?.type === "message"
+                  ? "Delete this message?"
+                  : "Delete entire chat?"}
+              </h3>
+              <div className="flex justify-center gap-3 mt-4">
                 <button
                   onClick={() => setShowDeleteModal(false)}
-                  className="px-4 py-2 bg-gray-300 rounded-lg"
+                  className="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-lg text-sm font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleDelete}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg"
+                  disabled={isDeleting}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium"
                 >
                   {isDeleting ? "Deleting..." : "Delete"}
                 </button>

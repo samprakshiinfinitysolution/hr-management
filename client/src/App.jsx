@@ -28,7 +28,6 @@ import AdminChat from "./pages/AdminPage/AdminChat";
 import AdminPolicy from "./pages/AdminPage/AdminPolicy";
 import AdminEodReports from "./pages/AdminPage/AdminEodReports";
 
-
 // Employee pages
 import EmployeeLayout from "./Layout/EmployeeLayout";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
