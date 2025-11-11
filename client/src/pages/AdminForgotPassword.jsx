@@ -10,8 +10,7 @@ function AdminForgotPassword() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Implement your forgot password logic here
-    // For example, call an API to send a reset link to the email
+    
     setMessage("A reset link has been sent to your email address.");
   };
 

@@ -1,5 +1,4 @@
 
-//new update
 // server/controllers/adminController.js
 import Admin from "../models/adminModel.js";
 import Employee from "../models/employeeModel.js";
@@ -9,9 +8,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { jwtSecret } from "../config/config.js"; // Assuming you have this file
 
-/**
- * ✅ Register Main Admin
- */
+ // Register Main Admin
 export const registerAdmin = async (req, res) => {
   try {
     const { name, email, password } = req.body;

@@ -3,7 +3,7 @@ import io from "socket.io-client";
 import API from "../../utils/api";
 import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
-import { Trash2, FileText } from "lucide-react";
+import { Trash2, FileText, X } from "lucide-react";
 import { socket } from "../../socket/socket.js";
 
 export default function AdminChat() {
@@ -18,6 +18,7 @@ export default function AdminChat() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [selectedMessages, setSelectedMessages] = useState([]);
 
   const user = useSelector((state) => state.auth?.user);
   const chatBoxRef = useRef(null);
@@ -92,11 +93,11 @@ export default function AdminChat() {
       .catch(() => toast.error("Failed to load messages"));
 
     // Add inside useEffect for joinRoom
-socket.on("messageDelivered", ({ messageId }) => {
-  setMessages((prev) =>
-    prev.map((m) => (m._id === messageId ? { ...m, isDelivered: true } : m))
-  );
-});
+    socket.on("messageDelivered", ({ messageId }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m._id === messageId ? { ...m, isDelivered: true } : m))
+      );
+    });
 
 
     socket.on("receiveMessage", (msg) => {
@@ -156,9 +157,9 @@ socket.on("messageDelivered", ({ messageId }) => {
 
     if (unreadIds.length > 0) {
       const room = [selectedUser._id, adminId].sort().join("_");
-    console.log("📤 Sending confirmRead for:", unreadIds, "in room", room); // ✅ log
+      console.log("📤 Sending confirmRead for:", unreadIds, "in room", room); // ✅ log
 
-socket.emit("confirmRead", { messageIds: unreadIds, room });
+      socket.emit("confirmRead", { messageIds: unreadIds, room });
     }
   }, [messages, selectedUser, adminId]);
 
@@ -181,67 +182,30 @@ socket.emit("confirmRead", { messageIds: unreadIds, room });
     setMessage("");
   };
 
+  // ✅ Select message for deletion
+  const handleMessageSelect = (messageId) => {
+    // Only allow selecting own messages
+    const message = messages.find(m => m._id === messageId);
+    if (message?.senderId !== adminId) return;
+
+    setSelectedMessages((prev) =>
+      prev.includes(messageId)
+        ? prev.filter((id) => id !== messageId)
+        : [...prev, messageId]
+    );
+  };
+
+  // ✅ Delete selected messages
+  const handleDeleteSelected = () => {
+    if (selectedMessages.length === 0) return;
+    setDeleteTarget({ type: "messages", ids: selectedMessages });
+    setShowDeleteModal(true);
+  };
+
   // ✅ File upload handler
- const handleFileChange = async (e) => {
-  toast.error("File upload is currently disabled.");
-  // const file = e.target.files[0];
-  // if (!file) return;
-
-  // if (!adminId || !selectedUser?._id) {
-  //   toast.error("Cannot send file: missing sender or receiver ID");
-  //   e.target.value = "";
-  //   return;
-  // }
-
-  // const token = localStorage.getItem("token");
-  // if (!token) {
-  //   toast.error("No auth token found");
-  //   e.target.value = "";
-  //   return;
-  // }
-
-  // try {
-  //   toast.loading("Uploading file...", { id: "upload" });
-
-  //   const formData = new FormData();
-  //   formData.append("senderId", adminId);
-  //   formData.append("receiverId", selectedUser._id);
-  //   formData.append("file", file);
-
-  //   console.log("Uploading file:", {
-  //     senderId: adminId,
-  //     receiverId: selectedUser._id,
-  //     fileName: file.name,
-  //     fileType: file.type,
-  //   });
-
-  //   const res = await API.post("/chat", formData, {
-  //     headers: {
-  //       "Content-Type": "multipart/form-data",
-  //       Authorization: `Bearer ${token}`,
-  //     },
-  //   });
-
-  //   toast.dismiss("upload");
-
-  //   if (res.status === 201) {
-  //     const newMsg = res.data;
-  //     socket.emit("sendMessage", newMsg);
-  //     setMessages((prev) => [...prev, newMsg]);
-  //     toast.success("File sent successfully");
-  //   } else {
-  //     console.error("Upload failed:", res.data);
-  //     toast.error("Failed to upload file");
-  //   }
-  // } catch (err) {
-  //   console.error("Upload error:", err.response?.data || err.message);
-  //   toast.dismiss("upload");
-  //   toast.error("Upload failed");
-  // } finally {
-  //   e.target.value = "";
-  // }
-};
-
+  const handleFileChange = async (e) => {
+    toast.error("File upload is currently disabled.");
+  };
 
   // ✅ Delete chat/message
   const confirmDeleteMessage = (msgId) => {
@@ -263,6 +227,12 @@ socket.emit("confirmRead", { messageIds: unreadIds, room });
         await API.delete(`/chat/message/${deleteTarget.id}`);
         setMessages((prev) => prev.filter((m) => m._id !== deleteTarget.id));
         toast.success("Message deleted");
+      } else if (deleteTarget.type === "messages") {
+        await Promise.all(
+          deleteTarget.ids.map(id => API.delete(`/chat/message/${id}`))
+        );
+        setMessages((prev) => prev.filter((m) => !deleteTarget.ids.includes(m._id)));
+        toast.success(`${deleteTarget.ids.length} message(s) deleted`);
       } else if (deleteTarget.type === "chat" && selectedUser && adminId) {
         await API.delete(`/chat/${selectedUser._id}/${adminId}`);
         setMessages([]);
@@ -273,6 +243,7 @@ socket.emit("confirmRead", { messageIds: unreadIds, room });
       toast.error("Failed to delete");
     } finally {
       setIsDeleting(false);
+      setSelectedMessages([]);
     }
   };
 
@@ -301,9 +272,8 @@ socket.emit("confirmRead", { messageIds: unreadIds, room });
     <div className="flex flex-col md:flex-row h-[85vh] border rounded-xl overflow-hidden shadow-md transition-colors duration-300 max-w-full">
       {/* SIDEBAR */}
       <div
-        className={`w-full md:w-1/3 lg:w-1/4 border-r dark:border-gray-700 p-4 overflow-y-auto ${
-          selectedUser ? "hidden md:block" : "block"
-        }`}
+        className={`w-full md:w-1/3 lg:w-1/4 border-r dark:border-gray-700 p-4 overflow-y-auto ${selectedUser ? "hidden md:block" : "block"
+          }`}
       >
         <h2 className="font-semibold text-lg mb-4 text-blue-600 text-center md:text-left">
           Chat With
@@ -311,21 +281,19 @@ socket.emit("confirmRead", { messageIds: unreadIds, room });
         <div className="flex justify-center md:justify-start mb-5 gap-2 flex-wrap">
           <button
             onClick={() => setChatType("employee")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              chatType === "employee"
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${chatType === "employee"
                 ? "bg-blue-600 text-white"
                 : "border hover:bg-gray-200 hover:text-black cursor-pointer"
-            }`}
+              }`}
           >
             Employees
           </button>
           <button
             onClick={() => setChatType("admin")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              chatType === "admin"
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${chatType === "admin"
                 ? "bg-blue-600 text-white"
                 : "border hover:bg-gray-200 hover:text-black cursor-pointer"
-            }`}
+              }`}
           >
             Admins
           </button>
@@ -336,18 +304,16 @@ socket.emit("confirmRead", { messageIds: unreadIds, room });
               <div
                 key={u._id}
                 onClick={() => setSelectedUser(u)}
-                className={`p-3 cursor-pointer rounded-lg text-center md:text-left text-sm font-medium transition flex items-center gap-2 ${
-                  selectedUser?._id === u._id
+                className={`p-3 cursor-pointer rounded-lg text-center md:text-left text-sm font-medium transition flex items-center gap-2 ${selectedUser?._id === u._id
                     ? "bg-blue-600 text-white"
                     : "border hover:bg-gray-200 hover:text-black"
-                }`}
+                  }`}
               >
                 <span
-                  className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                    onlineUsers.includes(u._id)
+                  className={`w-2 h-2 rounded-full flex-shrink-0 ${onlineUsers.includes(u._id)
                       ? "bg-green-500"
                       : "bg-red-500"
-                  }`}
+                    }`}
                   title={onlineUsers.includes(u._id) ? "Online" : "Offline"}
                 ></span>
                 <span>{u.name}</span>
@@ -363,21 +329,29 @@ socket.emit("confirmRead", { messageIds: unreadIds, room });
 
       {/* CHAT AREA */}
       <div
-        className={`flex-1 flex flex-col relative w-full overflow-hidden ${
-          !selectedUser ? "hidden md:flex" : "flex"
-        }`}
+        className={`flex-1 flex flex-col relative w-full overflow-hidden ${!selectedUser ? "hidden md:flex" : "flex"
+          }`}
       >
         {selectedUser ? (
           <>
-            <div className="p-4 border-b dark:border-gray-700 font-semibold text-blue-600 flex justify-between items-center sticky top-0 z-10">
-              <span>Chat with {selectedUser.name}</span>
-              <button
-                onClick={confirmDeleteChat}
-                className="text-red-600 hover:text-red-800 flex items-center gap-1 text-sm"
-              >
-                <Trash2 size={18} /> Delete Chat
-              </button>
-            </div>
+            {selectedMessages.length > 0 ? (
+              <div className="p-4 border-b dark:border-gray-700 bg-blue-50 dark:bg-blue-900/50 font-semibold flex justify-between items-center sticky top-0 z-10">
+                <button onClick={() => setSelectedMessages([])} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+                  <X size={20} />
+                </button>
+                <span>{selectedMessages.length} selected</span>
+                <button onClick={handleDeleteSelected} className="text-red-600 hover:text-red-800 p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900/50">
+                  <Trash2 size={20} />
+                </button>
+              </div>
+            ) : (
+              <div className="p-4 border-b dark:border-gray-700 font-semibold text-blue-600 flex justify-between items-center sticky top-0 z-10">
+                <span>Chat with {selectedUser.name}</span>
+                <button onClick={confirmDeleteChat} className="text-red-600 hover:text-red-800 flex items-center gap-1 text-sm">
+                  <Trash2 size={18} /> Delete Chat
+                </button>
+              </div>
+            )}
 
             {/* Messages */}
             <div ref={chatBoxRef} className="flex-1 p-4 overflow-y-auto space-y-4">
@@ -390,39 +364,44 @@ socket.emit("confirmRead", { messageIds: unreadIds, room });
                     {groupedMessages[dateKey].map((m, i) => (
                       <div
                         key={m._id || i}
-                        className={`relative group px-3 pr-6 py-2 rounded-2xl max-w-[80%] md:max-w-[70%] break-words shadow-sm transition ${
-                          m.senderId === adminId
-                            ? "bg-blue-600 text-white ml-auto self-end rounded-br-sm"
-                            : "bg-gray-200 text-black dark:bg-blue-900 dark:text-white self-start rounded-bl-sm"
-                        }`}
+                        onClick={() => m._id && handleMessageSelect(m._id)}
+                        className={`
+                          relative group px-3 py-2 rounded-2xl max-w-[80%] md:max-w-[70%] break-words shadow-sm transition w-fit
+                          ${m.senderId === adminId ? "cursor-pointer" : ""}
+                          ${m.senderId === adminId
+                            ? "ml-auto self-end rounded-br-sm" // Always apply alignment for own messages
+                            : "self-start rounded-bl-sm" // Always apply alignment for other's messages
+                          }
+                          ${selectedMessages.includes(m._id)
+                            ? "bg-blue-400 dark:bg-gray-400 text-white" // Selected state
+                            : m.senderId === adminId
+                              ? "bg-blue-600 text-white" // Own message, not selected
+                              : "bg-gray-200 text-black dark:bg-blue-900 dark:text-white" // Other's message, not selected
+                          }
+                        `}
                       >
-                        {m.type === "file" || m.type === "image" ? (
-                          m.message.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
-                            <img
-                              src={m.message}
-                              alt="attachment"
-                              className="max-w-[200px] rounded-lg cursor-pointer hover:opacity-90 transition"
-                              onClick={() => window.open(m.message, "_blank")}
-                            />
-                          ) : (
-                            <a
-                              href={m.message}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="underline text-sm text-blue-200 hover:text-blue-100 break-all"
-                            >
-                              <span className="truncate max-w-[calc(100%-2rem)] inline-block text-red-600">
-                                {decodeURIComponent(m.message.split("/").pop())}
-                              </span>
-                            </a>
-                          )
-                        ) : (
-                          <p className="whitespace-pre-wrap break-words leading-snug pr-10">
-                            {m.message}
-                          </p>
-                        )}
-
-                        <div className="absolute bottom-1 right-2 flex items-center gap-1 text-[10px] opacity-75">
+                        <div className="flex items-end gap-2">
+                          <div className="whitespace-pre-wrap break-words leading-snug">
+                            {m.type === "file" || m.type === "image" ? (
+                              m.message.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
+                                <img
+                                  src={m.message}
+                                  alt="attachment"
+                                  className="max-w-[200px] rounded-lg cursor-pointer hover:opacity-90 transition"
+                                  onClick={() => window.open(m.message, "_blank")}
+                                />
+                              ) : (
+                                <a href={m.message} target="_blank" rel="noopener noreferrer" className="underline text-sm text-blue-200 hover:text-blue-100 break-all">
+                                  <span className="truncate max-w-[calc(100%-2rem)] inline-block text-red-600">
+                                    {decodeURIComponent(m.message.split("/").pop())}
+                                  </span>
+                                </a>
+                              )
+                            ) : (
+                              m.message
+                            )}
+                          </div>
+                          <div className="flex-shrink-0 self-end flex items-center gap-1 text-[10px] opacity-75">
                           <span>
                             {new Date(m.createdAt).toLocaleTimeString([], {
                               hour: "2-digit",
@@ -438,16 +417,8 @@ socket.emit("confirmRead", { messageIds: unreadIds, room });
                               )}
                             </span>
                           )}
+                          </div>
                         </div>
-
-                        {m.senderId === adminId && m._id && (
-                          <button
-                            onClick={() => confirmDeleteMessage(m._id)}
-                            className="absolute top-1 right-1 hidden group-hover:block text-xs text-red-300 hover:text-red-800"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -520,6 +491,8 @@ socket.emit("confirmRead", { messageIds: unreadIds, room });
               <h3 className="text-lg font-semibold mb-3 text-red-600">
                 {deleteTarget?.type === "message"
                   ? "Delete this message?"
+                  : deleteTarget?.type === "messages"
+                  ? `Delete ${deleteTarget.ids.length} message(s)?`
                   : "Delete entire chat?"}
               </h3>
               <div className="flex justify-center gap-3 mt-4">
@@ -545,6 +518,3 @@ socket.emit("confirmRead", { messageIds: unreadIds, room });
     </div>
   );
 }
-//ok no control
-
-

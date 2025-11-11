@@ -148,21 +148,6 @@ export default function EmployeeSettings() {
           </button>
         </form>
       </div>
-
-      {/* Profile Visibility */}
-      {/* <button
-        onClick={() => {
-          dispatch(toggleProfileVisibility());
-          toast.success(`Profile is now ${!profilePublic ? "Public" : "Private"}`);
-        }}
-        className="w-full flex items-center justify-between p-4  rounded-xl hover:shadow-md transition text-left"
-      >
-        <div className="flex items-center gap-3">
-          <User className="text-green-500" />
-          <span className="font-medium">Profile Visibility</span>
-        </div>
-        <span className="font-semibold">{profilePublic ? "Public" : "Private"}</span>
-      </button> */}
     </div>
   );
 }

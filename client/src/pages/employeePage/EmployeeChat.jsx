@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import API from "../../utils/api";
 import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
-import { Trash2 } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 import { socket } from "../../socket/socket.js";
 
 export default function EmployeeChat() {
@@ -16,6 +16,7 @@ export default function EmployeeChat() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedMessages, setSelectedMessages] = useState([]);
 
   const user = useSelector((state) => state.auth?.user);
   const chatBoxRef = useRef(null);
@@ -38,13 +39,17 @@ export default function EmployeeChat() {
   // Load users list
   useEffect(() => {
     const endpoint = chatType === "admin" ? "/admins" : "/employees";
+    if (!employeeId) return; // 💡 Don't fetch until employeeId is available
+
     setUsers([]);
     setSelectedUser(null);
 
     API.get(endpoint)
-      .then((res) => setUsers(res.data))
+      .then((res) => {
+        setUsers(res.data.filter(u => u._id !== employeeId)); // Filter out self
+      })
       .catch(() => toast.error(`Failed to load ${chatType}s`));
-  }, [chatType]);
+  }, [chatType, employeeId]);
 
   // Online users
   useEffect(() => {
@@ -171,6 +176,26 @@ export default function EmployeeChat() {
     setMessage("");
   };
 
+  // ✅ Select message for deletion
+  const handleMessageSelect = (messageId) => {
+    // Only allow selecting own messages
+    const message = messages.find(m => m._id === messageId);
+    if (message?.senderId !== employeeId) return;
+
+    setSelectedMessages((prev) =>
+      prev.includes(messageId)
+        ? prev.filter((id) => id !== messageId)
+        : [...prev, messageId]
+    );
+  };
+
+  // ✅ Delete selected messages
+  const handleDeleteSelected = () => {
+    if (selectedMessages.length === 0) return;
+    setDeleteTarget({ type: "messages", ids: selectedMessages });
+    setShowDeleteModal(true);
+  };
+
   // File upload
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
@@ -230,6 +255,12 @@ export default function EmployeeChat() {
         await API.delete(`/chat/message/${deleteTarget.id}`);
         setMessages((prev) => prev.filter((m) => m._id !== deleteTarget.id));
         toast.success("Message deleted");
+      } else if (deleteTarget.type === "messages") {
+        await Promise.all(
+          deleteTarget.ids.map(id => API.delete(`/chat/message/${id}`))
+        );
+        setMessages((prev) => prev.filter((m) => !deleteTarget.ids.includes(m._id)));
+        toast.success("Message deleted");
       } else if (deleteTarget.type === "chat" && selectedUser && employeeId) {
         await API.delete(`/chat/${selectedUser._id}/${employeeId}`);
         setMessages([]);
@@ -240,6 +271,7 @@ export default function EmployeeChat() {
       toast.error("Failed to delete");
     } finally {
       setIsDeleting(false);
+      setSelectedMessages([]);
     }
   };
 
@@ -342,15 +374,25 @@ export default function EmployeeChat() {
         {selectedUser ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 border-b dark:border-gray-700 font-semibold text-blue-600 flex justify-between items-center sticky top-0 z-10">
-              <span>Chat with {selectedUser.name}</span>
-              <button
-                onClick={confirmDeleteChat}
-                className="text-red-600 hover:text-red-800 flex items-center gap-1 text-sm"
-              >
-                <Trash2 size={18} /> Delete Chat
-              </button>
-            </div>
+            {selectedMessages.length > 0 ? (
+              <div className="p-4 border-b dark:border-gray-700 bg-blue-50 dark:bg-blue-900/50 font-semibold flex justify-between items-center sticky top-0 z-10">
+                <button onClick={() => setSelectedMessages([])} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+                  <X size={20} />
+                </button>
+                <span>{selectedMessages.length} selected</span>
+                <button onClick={handleDeleteSelected} className="text-red-600 hover:text-red-800 p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900/50">
+                  <Trash2 size={20} />
+                </button>
+              </div>
+            ) : (
+              <div className="p-4 border-b dark:border-gray-700 font-semibold text-blue-600 flex justify-between items-center sticky top-0 z-10">
+                <span>Chat with {selectedUser.name}</span>
+                <button onClick={confirmDeleteChat} className="text-red-600 hover:text-red-800 flex items-center gap-1 text-sm">
+                  <Trash2 size={18} /> Delete Chat
+                </button>
+              </div>
+            )}
+
 
             {/* Messages */}
             <div ref={chatBoxRef} className="flex-1 p-4 overflow-y-auto space-y-4">
@@ -363,41 +405,41 @@ export default function EmployeeChat() {
                     {groupedMessages[dateKey].map((m, i) => (
                       <div
                         key={m._id || i}
-                        className={`relative group px-3 pr-6 py-2 rounded-2xl max-w-[80%] md:max-w-[70%] break-words shadow-sm transition w-fit ${
-                          m.senderId === employeeId
-                            ? "bg-blue-600 text-white ml-auto self-end rounded-br-sm"
-                            : "bg-gray-200 text-black dark:bg-blue-900 dark:text-white self-start rounded-bl-sm"
-                        }`}
+                        onClick={() => m._id && handleMessageSelect(m._id)}
+                        className={`
+                          relative group px-3 py-2 rounded-2xl max-w-[80%] md:max-w-[70%] break-words shadow-sm transition w-fit
+                          ${m.senderId === employeeId ? "cursor-pointer" : ""}
+                          ${m.senderId === employeeId
+                            ? "ml-auto self-end rounded-br-sm" // Always apply alignment for own messages
+                            : "self-start rounded-bl-sm" // Always apply alignment for other's messages
+                          }
+                          ${selectedMessages.includes(m._id)
+                            ? "bg-blue-400 dark:bg-gray-400 text-white" // Selected state
+                            : m.senderId === employeeId
+                              ? "bg-blue-600 text-white" // Own message, not selected
+                              : "bg-gray-200 text-black dark:bg-blue-900 dark:text-white" // Other's message, not selected
+                          }
+                        `}
                       >
-                        <p className="whitespace-pre-wrap break-words leading-snug pr-10">
-                          {m.message}
-                        </p>
-
-                        {/* Time + ticks */}
-                        <div className="absolute bottom-1 right-2 flex items-center gap-1 text-[10px] opacity-75">
-                          <span>{formatTime(m.createdAt)}</span>
-                          {m.senderId === employeeId && (
-                            <span>
-                              {!m.isDelivered && !m.isRead && (
-                                <span className="text-white">✓</span>
-                              )}
-                              {m.isDelivered && !m.isRead && (
-                                <span className="text-white">✓✓</span>
-                              )}
-                              {m.isRead && <span className="text-white">✓✓</span>}
-                            </span>
-                          )}
+                        <div className="flex items-end gap-2">
+                          <div className="whitespace-pre-wrap break-words leading-snug">
+                            {m.message}
+                          </div>
+                          <div className="flex-shrink-0 self-end flex items-center gap-1 text-[10px] opacity-75">
+                            <span>{formatTime(m.createdAt)}</span>
+                            {m.senderId === employeeId && (
+                              <span className="flex items-center">
+                                {!m.isDelivered && !m.isRead && (
+                                  <span className="text-white">✓</span>
+                                )}
+                                {m.isDelivered && !m.isRead && (
+                                  <span className="text-white">✓✓</span>
+                                )}
+                                {m.isRead && <span className="text-white">✓✓</span>}
+                              </span>
+                            )}
+                          </div>
                         </div>
-
-                        {/* Delete button */}
-                        {m.senderId === employeeId && m._id && (
-                          <button
-                            onClick={() => confirmDeleteMessage(m._id)}
-                            className="absolute top-1 right-1 hidden group-hover:block text-xs text-red-300 hover:text-red-800"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -406,7 +448,7 @@ export default function EmployeeChat() {
             </div>
 
             {/* Input */}
-            <div className="p-2 sm:p-3 flex flex-wrap items-center gap-2 border-t dark:border-gray-700 sticky bottom-0 z-20">
+            <div className="p-2 sm:p-3 flex flex-wrap sm:flex-nowrap items-center gap-2 border-t dark:border-gray-700 sticky bottom-0 z-20">
               <div className="relative flex-shrink-0">
                 <button
                   onClick={() => document.getElementById("employeeFileInput").click()}
@@ -443,7 +485,7 @@ export default function EmployeeChat() {
                     sendMessage();
                   }
                 }}
-                className="flex-1 min-w-[150px] border border-gray-300 dark:border-gray-700 p-2 rounded-lg text-sm sm:text-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 w-full sm:w-auto min-w-[150px] border border-gray-300 dark:border-gray-700 p-2 rounded-lg text-sm sm:text-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Type a message..."
               />
 
@@ -451,7 +493,7 @@ export default function EmployeeChat() {
                 onClick={sendMessage}
                 className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-5 py-2 rounded-lg text-sm font-medium transition w-full sm:w-auto"
               >
-                Send
+                <span className="sm:hidden">Send Message</span><span className="hidden sm:inline">Send</span>
               </button>
             </div>
           </>
@@ -468,6 +510,8 @@ export default function EmployeeChat() {
               <h3 className="text-lg font-semibold mb-3 text-red-600">
                 {deleteTarget?.type === "message"
                   ? "Delete this message?"
+                  : deleteTarget?.type === "messages"
+                  ? `Delete ${deleteTarget.ids.length} message(s)?`
                   : "Delete entire chat?"}
               </h3>
               <div className="flex justify-center gap-3 mt-4">

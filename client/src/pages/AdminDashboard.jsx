@@ -12,9 +12,6 @@ const AdminAttendanceWidget = () => {
 
   const fetchTodayAttendance = async () => {
     try {
-      // Use the correct endpoint for admin/hr/manager attendance
-      // The route for this was added in the previous step to attendanceRoutes.js
-      // GET /api/attendance/admin/me -> uses getMyAttendance controller
       const res = await API.get("/attendance/admin/me");
       const todayRecord = res.data.find(rec => new Date(rec.date).toDateString() === new Date().toDateString());
       setTodayAttendance(todayRecord);

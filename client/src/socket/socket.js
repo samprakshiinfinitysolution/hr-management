@@ -1,7 +1,7 @@
 import { io } from "socket.io-client";
 
 // 👇 Remove /api if your VITE_API_URL has it
-let BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5002";
+let BASE_URL = import.meta.env.VITE_API_URL;
 
 // Ensure no trailing '/api'
 if (BASE_URL.endsWith("/api")) {

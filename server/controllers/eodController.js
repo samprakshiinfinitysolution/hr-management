@@ -1,31 +1,6 @@
 import EodReport from "../models/EodreportsModel.js";
 import Employee from "../models/employeeModel.js";
 
-// 🧩 Employee creates EOD report
-// export const createEodReport = async (req, res) => {
-//   try {
-//     const employeeId = req.user.id; // from auth middleware
-//     const employee = await Employee.findById(employeeId);
-
-//     if (!employee) return res.status(404).json({ message: "Employee not found" });
-
-//     const report = await EodReport.create({
-//       employee: employee._id,
-//       name: employee.name,
-//       project: req.body.project,
-//       date: req.body.date,
-//       reportingTime: req.body.reportingTime,
-//       eodTime: req.body.eodTime,
-//       summary: req.body.summary,
-//       rows: req.body.rows,
-//     });
-
-//     res.status(201).json(report);
-//   } catch (err) {
-//     res.status(500).json({ message: err.message });
-//   }
-// };
-
 export const createEodReport = async (req, res) => {
   try {
     const employeeId = req.user.id;
