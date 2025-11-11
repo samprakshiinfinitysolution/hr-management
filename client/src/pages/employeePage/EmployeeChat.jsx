@@ -173,42 +173,41 @@ export default function EmployeeChat() {
 
   // File upload
   const handleFileChange = async (e) => {
-    toast.error("File upload is currently disabled.");
-    // const file = e.target.files[0];
-    // if (!file) return;
+    const file = e.target.files[0];
+    if (!file) return;
 
-    // try {
-    //   toast.loading("Uploading file...", { id: "upload" });
+    try {
+      toast.loading("Uploading file...", { id: "upload" });
 
-    //   const formData = new FormData();
-    //   formData.append("file", file);
-    //   formData.append("senderId", employeeId);
-    //   formData.append("receiverId", selectedUser._id);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("senderId", employeeId);
+      formData.append("receiverId", selectedUser._id);
 
-    //   const token = localStorage.getItem("token");
+      const token = localStorage.getItem("token");
 
-    //   const res = await API.post("/chat", formData, {
-    //     headers: {
-    //       "Content-Type": "multipart/form-data",
-    //       Authorization: `Bearer ${token}`,
-    //     },
-    //   });
+      const res = await API.post("/chat", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    //   toast.dismiss("upload");
+      toast.dismiss("upload");
 
-    //   if (res.status === 201 || res.status === 200) {
-    //     const newMsg = res.data;
-    //     socket.emit("sendMessage", newMsg);
-    //     setMessages((prev) => [...prev, newMsg]);
-    //     toast.success("File sent");
-    //   } else toast.error("Failed to upload file");
-    // } catch (err) {
-    //   console.error("File upload error:", err);
-    //   toast.dismiss("upload");
-    //   toast.error("Upload failed");
-    // } finally {
-    //   e.target.value = "";
-    // }
+      if (res.status === 201 || res.status === 200) {
+        const newMsg = res.data;
+        socket.emit("sendMessage", newMsg);
+        setMessages((prev) => [...prev, newMsg]);
+        toast.success("File sent");
+      } else toast.error("Failed to upload file");
+    } catch (err) {
+      console.error("File upload error:", err);
+      toast.dismiss("upload");
+      toast.error("Upload failed");
+    } finally {
+      e.target.value = "";
+    }
   };
 
   // Delete handlers

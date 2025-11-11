@@ -2,13 +2,13 @@
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Sun, Moon, Bell, BellOff, Eye, EyeOff, X } from "lucide-react";
-import { toast } from "react-hot-toast";
+import toast, { Toaster } from "react-hot-toast";
 import {
   toggleDarkMode,
   toggleEmailNotifications,
 } from "../../features/auth/settingsSlice";
 import API from "../../utils/api"; 
-import { Trash2, Pencil, Save, ShieldCheck } from "lucide-react";
+import { Trash2, Pencil, Save, ShieldCheck, LogIn, Clock, AlertTriangle, LogOut, Power } from "lucide-react";
 
 
 export default function AdminSettings() {
@@ -323,7 +323,8 @@ export default function AdminSettings() {
 
   return (
     <div className={`p-6 max-w-3xl mx-auto space-y-6 ${isDarkMode ? "bg-gray-800 text-white" : "bg-white text-gray-800"} rounded-2xl shadow-2xl`}>
-      <h1 className="text-2xl font-bold">Settings</h1>
+      <Toaster position="top-right" />
+      <h1 className="text-3xl font-bold text-center">Settings</h1>
 
       {/* Dark Mode */}
       <button onClick={handleDarkMode} className="w-full flex items-center justify-between p-4 rounded-xl hover:shadow-md">
@@ -347,20 +348,21 @@ export default function AdminSettings() {
       {isAdmin && (
         <>
           {/* Office Time Settings */}
-          <div className="p-4 rounded-xl space-y-3 border">
+          <div className="p-6 rounded-2xl space-y-4 border border-gray-200 dark:border-gray-700 shadow-lg">
             <h2 className="font-semibold text-lg flex items-center gap-2">
               <ShieldCheck size={20} className="text-blue-500" />
               Attendance & Office Timings
             </h2>
             {loadingOfficeSettings ? <p>Loading office settings...</p> : (
               <form onSubmit={handleOfficeSettingsSave} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                   <SettingInput
                     label="Office Start Time"
                     name="officeStartTime"
                     type="time"
                     value={officeSettings.officeStartTime}
                     onChange={handleOfficeSettingsChange}
+                    icon={<LogIn size={16} className="text-gray-400 " />}
                   />
                   <SettingInput
                     label="Late Grace Period (minutes)"
@@ -368,6 +370,7 @@ export default function AdminSettings() {
                     type="number"
                     value={officeSettings.lateGraceMinutes}
                     onChange={handleOfficeSettingsChange}
+                    icon={<Clock size={16} className="text-gray-400" />}
                   />
                   <SettingInput
                     label="Half-day Login Cutoff"
@@ -375,6 +378,7 @@ export default function AdminSettings() {
                     type="time"
                     value={officeSettings.halfDayCutoff}
                     onChange={handleOfficeSettingsChange}
+                    icon={<AlertTriangle size={16} className="text-gray-400" />}
                   />
                   <SettingInput
                     label="Office End Time"
@@ -382,6 +386,7 @@ export default function AdminSettings() {
                     type="time"
                     value={officeSettings.officeEndTime}
                     onChange={handleOfficeSettingsChange}
+                    icon={<LogOut size={16} className="text-gray-400" />}
                   />
                   <SettingInput
                     label="Half-day Checkout Cutoff"
@@ -389,6 +394,7 @@ export default function AdminSettings() {
                     type="time"
                     value={officeSettings.halfDayCheckoutCutoff}
                     onChange={handleOfficeSettingsChange}
+                    icon={<AlertTriangle size={16} className="text-gray-400" />}
                   />
                   <SettingInput
                     label="Auto-Checkout Time"
@@ -396,10 +402,11 @@ export default function AdminSettings() {
                     type="time"
                     value={officeSettings.autoCheckoutTime}
                     onChange={handleOfficeSettingsChange}
+                    icon={<Power size={16} className="text-gray-400" />}
                   />
                 </div>
-                <button type="submit" className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center justify-center gap-2">
-                  <Save size={16} /> Save Office Settings
+                <button type="submit" className="w-full py-3 mt-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-300 font-semibold flex items-center justify-center gap-2">
+                  <Save size={18} /> Save Office Settings
                 </button>
               </form>
             )}
@@ -627,18 +634,23 @@ export default function AdminSettings() {
   );
 }
 
-const SettingInput = ({ label, name, type, value, onChange }) => (
+const SettingInput = ({ label, name, type, value, onChange, icon }) => (
   <div>
     <label htmlFor={name} className="block text-sm font-medium mb-1">
       {label}
     </label>
-    <input
-      id={name}
-      name={name}
-      type={type}
-      value={value}
-      onChange={onChange}
-      className="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
-    />
+    <div className="relative">
+      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        {icon}
+      </div>
+      <input
+        id={name}
+        name={name}
+        type={type}
+        value={value}
+        onChange={onChange}
+        className="w-full pl-10 p-2.5 border rounded-lg bg-transparent border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+      />
+    </div>
   </div>
 );

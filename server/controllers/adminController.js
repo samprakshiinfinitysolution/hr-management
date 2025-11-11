@@ -4,7 +4,7 @@
 import Admin from "../models/adminModel.js";
 import Employee from "../models/employeeModel.js";
 import Attendance from "../models/attendanceModel.js";
-import Leave from "../models/leaveModel.js"; // Import the Leave model
+import Leave from "../models/leaveModel.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { jwtSecret } from "../config/config.js"; // Assuming you have this file
@@ -268,7 +268,7 @@ export const getAdminDashboardData = async (req, res) => {
     res.json({
       totalEmployees,
       attendance: { total: totalEmployees, onTime, late, absent },
-      pendingLeaveCount, // Add pending leave count to the response
+      pendingLeaveCount,
     });
   } catch (error) {
     res.status(500).json({ message: "Error fetching dashboard data", error: error.message });

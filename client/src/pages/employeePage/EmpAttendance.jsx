@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { LogIn, LogOut, Calendar, UserStar, Check, X } from "lucide-react";
+import { LogIn, LogOut, Calendar, UserStar, Check, X, Coffee, Briefcase } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
@@ -39,6 +39,8 @@ export default function EmpAttendance() {
 
   const [loginTime, setLoginTime] = useState(null);
   const [checkoutTime, setCheckoutTime] = useState(null);
+  const [lunchStartTime, setLunchStartTime] = useState(null);
+  const [lunchEndTime, setLunchEndTime] = useState(null);
   const [selectedDate, setSelectedDate] = useState(getLocalDate());
   const [history, setHistory] = useState([]);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
@@ -71,7 +73,9 @@ export default function EmpAttendance() {
       const normalized = arr.map((r) => ({
         ...r,
         date: r.date ? r.date : r.attendanceDate ? r.attendanceDate : null,
-        login: r.login || r.checkIn || null,
+        login: r.checkIn ? new Date(r.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
+        lunchStart: r.lunchStartTime ? new Date(r.lunchStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
+        lunchEnd: r.lunchEndTime ? new Date(r.lunchEndTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
         logout: r.logout || r.checkOut || null,
       }));
 
@@ -86,11 +90,15 @@ export default function EmpAttendance() {
       if (todayRec) {
         setLoginTime(todayRec.login || null);
         setCheckoutTime(todayRec.logout || null);
+        setLunchStartTime(todayRec.lunchStart || null);
+        setLunchEndTime(todayRec.lunchEnd || null);
         setHasLoggedInToday(!!todayRec.login);
       } else {
         setLoginTime(null);
         setCheckoutTime(null);
         setHasLoggedInToday(false);
+        setLunchStartTime(null);
+        setLunchEndTime(null);
       }
     } catch (err) {
       console.error("fetchHistory error:", err);
@@ -177,6 +185,41 @@ export default function EmpAttendance() {
     }
   };
 
+  const handleLunchStart = async () => {
+    if (selectedDate !== getLocalDate()) {
+      toast.error("Can only mark lunch break for today");
+      return;
+    }
+    try {
+      const timeStr = get24HourTime();
+      await API.post("/attendance/lunch-start", { date: selectedDate, time: timeStr });
+      toast.success(`🍱 Lunch break started at ${timeStr}`);
+      setLunchStartTime(timeStr);
+      await fetchHistory();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to start lunch break");
+    }
+  };
+
+  const handleLunchEnd = async () => {
+    if (selectedDate !== getLocalDate()) {
+      toast.error("Can only mark back to work for today");
+      return;
+    }
+    try {
+      const timeStr = get24HourTime();
+      await API.post("/attendance/lunch-end", { date: selectedDate, time: timeStr });
+      toast.success(`👍 Back to work at ${timeStr}`);
+      setLunchEndTime(timeStr);
+      await fetchHistory();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to end lunch break");
+    }
+  };
+
+
   return (
     <div className="flex justify-center items-start w-full">
       <Toaster />
@@ -227,6 +270,32 @@ export default function EmpAttendance() {
           </button>
         </div>
 
+        {/* Lunch Break Buttons */}
+        <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
+          <button
+            onClick={handleLunchStart}
+            disabled={!loginTime || !!lunchStartTime || !!checkoutTime}
+            className={`flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-semibold text-white transition ${
+              !loginTime || !!lunchStartTime || !!checkoutTime
+                ? "bg-gray-400 dark:bg-gray-700 cursor-not-allowed"
+                : "bg-yellow-500 hover:bg-yellow-600"
+            }`}
+          >
+            <Coffee size={20} /> {lunchStartTime ? "On Break" : "On Lunch Break"}
+          </button>
+          <button
+            onClick={handleLunchEnd}
+            disabled={!lunchStartTime || !!lunchEndTime || !!checkoutTime}
+            className={`flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-semibold text-white transition ${
+              !lunchStartTime || !!lunchEndTime || !!checkoutTime
+                ? "bg-gray-400 dark:bg-gray-700 cursor-not-allowed"
+                : "bg-cyan-500 hover:bg-cyan-600"
+            }`}
+          >
+            <Briefcase size={20} /> {lunchEndTime ? "Resumed" : "Back to Work"}
+          </button>
+        </div>
+
         <div className="rounded-xl p-4 mb-6">
           <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
             <Check className="text-green-600" /> Today’s Summary
@@ -244,6 +313,16 @@ export default function EmpAttendance() {
               <span className={checkoutTime ? "text-red-600 font-medium" : ""}>
                 {checkoutTime || "-"}
               </span>
+            </p>
+            <p>
+              <span className="font-semibold">Lunch Start:</span>{" "}
+              <span className={lunchStartTime ? "text-yellow-600 font-medium" : ""}>
+                {lunchStartTime || "-"}
+              </span>
+            </p>
+            <p>
+              <span className="font-semibold">Back to Work:</span>{" "}
+              <span className={lunchEndTime ? "text-cyan-600 font-medium" : ""}>{lunchEndTime || "-"}</span>
             </p>
           </div>
         </div>
