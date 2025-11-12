@@ -34,7 +34,7 @@ export default function AdminSidebar() {
 
   // Filter Menu by Role
   const menuItems = baseMenu.filter((item) => {
-    if (role === "hr" && item.name === "Task") return false;
+    if (role === "hr" && item.name === "Task/Eod Reports") return false;
     if (role === "manager" && item.name === "Salary") return false;
     return true;
   });
