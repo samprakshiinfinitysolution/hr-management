@@ -39,8 +39,8 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173", // Local frontend
-      "https://samprakshiinfinitysolution-hr-management.onrender.com",
-      "https://hr.samprakshiinfinitysolution.com/",
+      // "https://samprakshiinfinitysolution-hr-management.onrender.com",
+      "https://hr.samprakshiinfinitysolution.com",
     ],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
@@ -52,8 +52,8 @@ const io = new Server(httpServer, {
   cors: {
     origin: [
       "http://localhost:5173",
-      "https://samprakshiinfinitysolution-hr-management.onrender.com",
-      "https://hr.samprakshiinfinitysolution.com/",
+      // "https://samprakshiinfinitysolution-hr-management.onrender.com",
+      "https://hr.samprakshiinfinitysolution.com",
     ],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
