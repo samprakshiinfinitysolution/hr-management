@@ -1,34 +1,43 @@
-
 import multer from "multer";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
 import cloudinary from "../config/cloudinary.js";
 
-// ✅ Create Cloudinary Storage for chat + general uploads
+// ⬇️ Cloudinary storage
 const storage = new CloudinaryStorage({
   cloudinary,
-  params: async (req, file) => {
-    // Detect the folder dynamically if you want (optional)
-    const folder = "hr_management/chat_uploads";
+  params: (req, file) => {
+    const base = req?.baseUrl || "";
+    const url = req?.url || "";
+    const fullPath = base + url;
 
-    // Allow images, docs, pdfs — Cloudinary auto-detects resource type
-    const allowedFormats = ["jpg", "jpeg", "png", "webp", "pdf", "docx", "xlsx"];
-
-    // Optional: apply transformations only to images
-    const isImage = file.mimetype.startsWith("image/");
-    const transformation = isImage
-      ? [{ width: 1000, height: 1000, crop: "limit" }]
-      : [];
+    const isProfile = fullPath.includes("upload/profile");
 
     return {
-      folder,
-      resource_type: "auto", // auto-detect (image, raw, video)
-      allowed_formats: allowedFormats,
-      transformation,
+      folder: isProfile
+        ? "hr_management/profile_uploads"
+        : "hr_management/chat_uploads",
+
+      resource_type: "auto",
+      allowed_formats: ["jpg", "jpeg", "png", "webp"],
+      transformation: [{ width: 1000, height: 1000, crop: "limit" }],
     };
   },
 });
 
-// ✅ Multer upload middleware
-const upload = multer({ storage });
+// ⬇️ Multer uploader
+const uploader = multer({ storage }).single("profileImage");
 
-export default upload;
+// ⬇️ Export wrapper middleware
+export default function uploadMiddleware(req, res, next) {
+  uploader(req, res, (err) => {
+    if (err) {
+      console.error("❌ Multer Upload Error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Upload failed",
+        error: err.message,
+      });
+    }
+    next();
+  });
+}

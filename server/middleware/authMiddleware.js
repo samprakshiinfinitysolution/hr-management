@@ -6,21 +6,48 @@ import { jwtSecret } from "../config/config.js";
 /**
  * ✅ Verify JWT Token
  */
+// export const verifyToken = (req, res, next) => {
+//   try {
+//     const authHeader = req.headers.authorization;
+//     if (!authHeader?.startsWith("Bearer ")) {
+//       return res.status(401).json({ message: "No token provided" });
+//     }
+
+//     const token = authHeader.split(" ")[1];
+//     const decoded = jwt.verify(token, jwtSecret);
+
+//     req.user = {
+//       id: decoded.id || decoded._id,
+//       role: (decoded.role || "").toLowerCase().trim(),
+//       isMainAdmin: decoded.isMainAdmin || false, // ✅ Main admin recognition
+//       createdBy: decoded.createdBy || null, // VERY IMPORTANT: Pass createdBy for sub-admins
+//     };
+
+//     if (!req.user.id) {
+//       return res.status(401).json({ message: "Invalid token payload" });
+//     }
+
+//     next();
+//   } catch (err) {
+//     console.error("verifyToken error:", err);
+//     res.status(401).json({ message: "Invalid or expired token" });
+//   }
+// };
 export const verifyToken = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
+    console.log("🔎 verifyToken authHeader:", authHeader?.slice?.(0,50)); 
     if (!authHeader?.startsWith("Bearer ")) {
       return res.status(401).json({ message: "No token provided" });
     }
 
     const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, jwtSecret);
-
     req.user = {
-      id: decoded.id || decoded._id,
+      id: decoded.id || decoded._id || decoded.userId || null,
       role: (decoded.role || "").toLowerCase().trim(),
-      isMainAdmin: decoded.isMainAdmin || false, // ✅ Main admin recognition
-      createdBy: decoded.createdBy || null, // VERY IMPORTANT: Pass createdBy for sub-admins
+      isMainAdmin: decoded.isMainAdmin || false,
+      createdBy: decoded.createdBy || null,
     };
 
     if (!req.user.id) {

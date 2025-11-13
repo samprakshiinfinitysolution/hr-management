@@ -1,6 +1,6 @@
 import express from "express";
 import { getMessages, sendMessage, deleteMessage, deleteChat } from "../controllers/chatController.js";
-import upload from "../middleware/uploadCloudinary.js";
+import uploadMiddleware from "../middleware/uploadCloudinary.js";
 import { verifyToken } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -11,6 +11,31 @@ router.delete("/message/:messageId", verifyToken, deleteMessage);
 router.delete("/:user1/:user2", verifyToken, deleteChat);
 
 // upload route
-router.post("/upload", verifyToken, upload.single("file"), async (req, res) => { "" });
+
+router.post(
+  "/upload",
+  verifyToken,
+  uploadMiddleware,
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: "No file uploaded" });
+      }
+
+      return res.status(200).json({
+        success: true,
+        fileUrl: req.file.path,
+      });
+    } catch (err) {
+      console.error("Chat Upload Error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to upload file",
+        error: err.message,
+      });
+    }
+  }
+);
 
 export default router;
+
