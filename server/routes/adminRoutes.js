@@ -48,6 +48,7 @@ router.delete("/employee/:id", verifyToken, adminOnly, deleteEmployee);
 
 // Approval
 router.put("/employee/:id/approve", verifyToken, adminOnly, approveEmployeeUpdate);
+router.put("/employee/:id/verify", verifyToken, adminOnly, approveEmployeeUpdate); // Add this line
 router.put("/employee/:id/reject", verifyToken, adminOnly, rejectEmployeeUpdate);
 
 // Dashboard + birthdays

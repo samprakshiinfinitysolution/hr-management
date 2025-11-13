@@ -29,7 +29,7 @@ const employeeSchema = new mongoose.Schema({
   contact: { type: String },
   verified: { type: Boolean, default: false },
   editCount: { type: Number, default: 0 },
-  status: { type: String, default: "Verified" },
+  status: { type: String, default: null },
   pendingUpdates: { type: Object },
   alternateNumber: { type: String },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },

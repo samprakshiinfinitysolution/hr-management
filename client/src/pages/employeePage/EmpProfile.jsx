@@ -56,11 +56,14 @@ export default function EmployeeProfile() {
     setLoading(true);
     try {
       const res = await API.put("/profile", form);
-      setProfile(res.data.employee);
-      setForm(res.data.employee);
+      // The backend returns employee in res.data.employee OR res.data
+      const updatedEmployee = res.data.employee || res.data;
+      setProfile(updatedEmployee);
+      setForm(updatedEmployee);
       setEditing(false);
       toast.success(res.data.message || "Update request sent successfully!");
     } catch (err) {
+      console.error("handleSave err:", err);
       toast.error(err.response?.data?.message || "Failed to send update request.");
     } finally {
       setLoading(false);
@@ -115,20 +118,44 @@ export default function EmployeeProfile() {
           </div>
         )}
         <div className="flex items-center gap-2 font-semibold">
-          {profile.status === "Pending" ? (
-            <span className="text-yellow-500 flex items-center gap-1"><AlertTriangle size={16} /> Awaiting Approval</span>
-          ) : profile.verified ? (
-            <span className="text-green-500 flex items-center gap-1"><CheckCircle size={16} /> Verified by HR</span>
-          ) : (
-            <span className="text-red-500 flex items-center gap-1"><XCircle size={16} /> Not Verified</span>
+
+          {/* Pending */}
+          {profile.status === "Pending" && (
+            <span className="text-yellow-500 flex items-center gap-1">
+              <AlertTriangle size={16} /> Awaiting Approval
+            </span>
           )}
+
+          {/* Rejected */}
+          {profile.status === "Rejected" && (
+            <span className="text-red-500 flex items-center gap-1">
+              <XCircle size={16} /> Update Rejected
+            </span>
+          )}
+
+          {/* Verified */}
+          {profile.verified === true && (
+            <span className="text-green-500 flex items-center gap-1">
+              <CheckCircle size={16} /> Verified by HR
+            </span>
+          )}
+
+          {/* New employee (no status + not verified) */}
+          {profile.verified === false && !profile.status && (
+            <span className="text-gray-500 flex items-center gap-1">
+              <XCircle size={16} /> Not Verified
+            </span>
+          )}
+
         </div>
+
+
         <p className="text-sm text-gray-500 mt-2">Update attempts used: {profile.editCount || 0} / 2</p>
       </div>
 
       {/* Profile Cards */}
-      <div className="grid md:grid-cols-3  gap-6"> 
-        <ProfileCard icon={<User />} title="Basic Info" fields={[["name", "Full Name"], ["email", "Email"], ["phone", "Contact"], ["position", "Position"]]} editing={editing} form={form} employee={profile} handleChange={handleChange}/>
+      <div className="grid md:grid-cols-3  gap-6">
+        <ProfileCard icon={<User />} title="Basic Info" fields={[["name", "Full Name"], ["email", "Email"], ["phone", "Contact"], ["position", "Position"]]} editing={editing} form={form} employee={profile} handleChange={handleChange} />
         <ProfileCard icon={<BookOpen />} title="Education" fields={[["highestQualification", "Highest Qualification"], ["yearOfPassing", "Year of Passing"]]} editing={editing} form={form} employee={profile} handleChange={handleChange} />
         <ProfileCard icon={<Home />} title="Address" fields={[["address", "Address"]]} editing={editing} form={form} employee={profile} handleChange={handleChange} />
         <ProfileCard icon={<Banknote />} title="Bank Details" fields={[["accountHolder", "Account Holder"], ["bankName", "Bank Name"], ["accountNumber", "Account Number"], ["ifsc", "IFSC Code"]]} editing={editing} form={form} employee={profile} handleChange={handleChange} />
