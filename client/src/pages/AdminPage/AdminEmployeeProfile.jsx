@@ -83,35 +83,46 @@ export default function AdminEmployeeProfile() {
   };
 
   const handleVerify = async () => {
-    try {
-      await API.put(`/admin/employee/${id}/verify`);
-      toast.success("Employee verified successfully!");
-      setEmployee(prev => ({ ...prev, verified: true }));
-    } catch (err) {
-      toast.error("Verification failed");
-    }
-  };
+  try {
+    const res = await API.put(`/admin/employee/${id}/verify`);
+    toast.success("Employee verified successfully!");
+    // Use returned employee to update UI
+    setEmployee(res.data.employee || { ...employee, verified: true });
+  } catch (err) {
+    console.error("verify err:", err);
+    toast.error("Verification failed");
+  }
+};
 
-  const handleApprove = async () => {
-    try {
-      await API.put(`/admin/employee/${id}/approve`);
-      toast.success("Changes approved!");
-      fetchEmployee();
-    } catch (err) {
-      toast.error("Approval failed");
-    }
-  };
+ const handleApprove = async () => {
+  try {
+    const res = await API.put(`/admin/employee/${id}/approve`);
+    toast.success("Changes approved!");
+    // update UI with returned employee (which has pendingUpdates applied)
+    const updated = res.data.employee || {};
+    setEmployee(updated);
+    setForm(updated);
+    setShowPending(false);
+  } catch (err) {
+    console.error("approve err:", err);
+    toast.error(err.response?.data?.message || "Approval failed");
+  }
+};
+
 
   const handleReject = async () => {
-    try {
-      await API.put(`/admin/employee/${id}/reject`);
-      toast.success("Changes rejected!");
-      fetchEmployee();
-    } catch (err) {
-      toast.error("Rejection failed");
-    }
-  };
-
+  try {
+    const res = await API.put(`/admin/employee/${id}/reject`);
+    toast.success("Changes rejected");
+    const updated = res.data.employee || {};
+    setEmployee(updated);
+    setForm(updated);
+    setShowPending(false);
+  } catch (err) {
+    console.error("reject err:", err);
+    toast.error(err.response?.data?.message || "Rejection failed");
+  }
+};
   if (loading) return <div className="text-center mt-10">Loading...</div>;
   if (!employee) return <div className="text-center mt-10">Employee not found</div>;
 

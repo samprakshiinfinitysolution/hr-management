@@ -6,9 +6,10 @@ import Attendance from "../models/attendanceModel.js";
 import Leave from "../models/leaveModel.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import Notification from "../models/notificationModel.js"
 import { jwtSecret } from "../config/config.js"; // Assuming you have this file
 
- // Register Main Admin
+// Register Main Admin
 export const registerAdmin = async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -56,7 +57,7 @@ export const loginAdmin = async (req, res) => {
       token,
       role: admin.role,
       name: admin.name,
-        id: admin.id,  // ✅ add this
+      id: admin.id,  // ✅ add this
 
       isMainAdmin: admin.isMainAdmin,
     });
@@ -301,27 +302,56 @@ export const getAllAdmins = async (req, res) => {
 export const getBirthdays = async (req, res) => {
   try {
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     const employees = await Employee.find();
 
     const birthdays = employees.filter((emp) => {
-      const dob = new Date(emp.dob);
-      return dob.getDate() === today.getDate() && dob.getMonth() === today.getMonth();
+      if (!emp.birthday) return false;
+
+      const bday = new Date(emp.birthday);
+      return (
+        bday.getDate() === today.getDate() &&
+        bday.getMonth() === today.getMonth()
+      );
     });
 
     res.json(birthdays);
   } catch (error) {
-    res.status(500).json({ message: "Error fetching birthdays", error: error.message });
+    console.error("Birthday fetch error:", error);
+    res.status(500).json({
+      message: "Error fetching birthdays",
+      error: error.message,
+    });
   }
 };
+
 
 /**
  * ✅ Send Birthday Wish (Dummy)
  */
 export const sendBirthdayWish = async (req, res) => {
   try {
+    const employeeId = req.params.employeeId;
+
+    const employee = await Employee.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    // Create notification for employee
+    await new Notification({
+      userId: employeeId,
+      title: "🎉 Happy Birthday!",
+      message: `Dear ${employee.name}, your admin has sent you birthday wishes! 🎂`,
+      type: "birthday",
+    }).save();
+
     res.json({ message: "Birthday wish sent successfully!" });
+
   } catch (error) {
-    res.status(500).json({ message: "Error sending wish", error: error.message });
+    console.error("Birthday wish error:", error);
+    res.status(500).json({ message: "Error sending birthday wish", error: error.message });
   }
 };
 
@@ -330,29 +360,80 @@ export const sendBirthdayWish = async (req, res) => {
  */
 export const approveEmployeeUpdate = async (req, res) => {
   try {
-    const employee = await Employee.findById(req.params.id);
-    if (!employee) return res.status(404).json({ message: "Employee not found" });
+    const employeeId = req.params.id;
+    const employee = await Employee.findById(employeeId);
 
-    employee.isApproved = true;
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    if (!employee.pendingUpdates || Object.keys(employee.pendingUpdates).length === 0) {
+      return res.status(400).json({ message: "No pending updates to approve" });
+    }
+
+    // Apply updates
+    Object.assign(employee, employee.pendingUpdates);
+
+    // Clear pending
+    employee.pendingUpdates = null;
+    // Mark profile verified (optional)
+    employee.status = "Verified";
+    employee.verified = true;
+
     await employee.save();
 
-    res.json({ message: "Employee update approved" });
+    return res.json({
+      message: "Employee changes approved successfully",
+      employee,
+    });
+
   } catch (error) {
-    res.status(500).json({ message: "Approval error", error: error.message });
+    console.error("Approve error:", error);
+    res.status(500).json({ message: "Server error while approving changes" });
   }
 };
+
 
 export const rejectEmployeeUpdate = async (req, res) => {
   try {
     const employee = await Employee.findById(req.params.id);
-    if (!employee) return res.status(404).json({ message: "Employee not found" });
+    if (!employee)
+      return res.status(404).json({ message: "Employee not found" });
 
-    employee.isApproved = false;
+    if (employee.pendingUpdates) {
+      // merge pending into main data (but mark rejected)
+      Object.assign(employee, employee.pendingUpdates);
+    }
+
+    employee.pendingUpdates = null;
+    employee.status = "Rejected";   // keep status so employee knows it is rejected
+
     await employee.save();
 
-    res.json({ message: "Employee update rejected" });
+    return res.json({
+      message: "Employee update rejected",
+      employee,
+    });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Rejection error", error: error.message });
+  }
+};
+
+export const verifyEmployee = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const employee = await Employee.findById(id);
+    if (!employee) return res.status(404).json({ message: "Employee not found" });
+
+    employee.verified = true;
+    employee.status = "Verified";
+    await employee.save();
+
+    return res.json({ message: "Employee verified", employee });
+  } catch (error) {
+    console.error("verifyEmployee error:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
