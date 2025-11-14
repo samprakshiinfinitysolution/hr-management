@@ -22,7 +22,21 @@ export default function EmployeeChat() {
   const chatBoxRef = useRef(null);
   const inputRef = useRef(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewType, setPreviewType] = useState(null);
+  const longPressTimer = useRef(null);
+  const isLongPress = useRef(false);
 
+// ⬇️ Add these two
+const onImagePreview = (url) => {
+  setPreviewUrl(url);
+  setPreviewType("image");
+};
+
+const onFilePreview = (url) => {
+  setPreviewUrl(url);
+  setPreviewType("file");
+};
   // Load employee ID from user or localStorage
   useEffect(() => {
     const storedRaw = localStorage.getItem("employee");
@@ -158,21 +172,22 @@ export default function EmployeeChat() {
   }, [messages, selectedUser, employeeId]);
 
   // Send message
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!message.trim() || !selectedUser || !employeeId) return;
 
-    const room = [selectedUser._id, employeeId].sort().join("_");
-    const msgData = {
-      room,
+    // 1. Save message to DB via API
+    const { data: finalMsg } = await API.post("/chat", {
       senderId: employeeId,
       receiverId: selectedUser._id,
       message,
       type: "text",
-      createdAt: new Date().toISOString(),
-    };
+    });
 
-    socket.emit("sendMessage", msgData);
-    setMessages((prev) => [...prev, msgData]);
+    // 2. Emit message via socket
+    socket.emit("sendMessage", finalMsg);
+
+    // 3. Update UI with the message from the server (which has an _id)
+    setMessages((prev) => [...prev, finalMsg]);
     setMessage("");
   };
 
@@ -188,6 +203,23 @@ export default function EmployeeChat() {
         : [...prev, messageId]
     );
   };
+  // 3 second long press start
+  const startLongPress = (messageId) => {
+    isLongPress.current = false;
+
+    longPressTimer.current = setTimeout(() => {
+      isLongPress.current = true;
+      handleMessageSelect(messageId);   // 👉 Select message for delete
+    }, 500); // 5 ms
+  };
+
+  // Long press end (mouseup / leave)
+  const endLongPress = () => {
+    clearTimeout(longPressTimer.current);
+
+    // If long press already triggered → don't treat as click
+    return !isLongPress.current;
+  };
 
   // ✅ Delete selected messages
   const handleDeleteSelected = () => {
@@ -195,6 +227,13 @@ export default function EmployeeChat() {
     setDeleteTarget({ type: "messages", ids: selectedMessages });
     setShowDeleteModal(true);
   };
+const handleTextClick = (msgId) => {
+  if (!msgId) return;
+  handleMessageSelect(msgId); // instantly select
+};
+
+
+
 
   // File upload
   const handleFileChange = async (e) => {
@@ -322,16 +361,15 @@ export default function EmployeeChat() {
       return "File";
     }
   };
-const getInlineUrl = (url) => {
-  if (!url) return "";
-  try {
-    const [base, query] = url.split("?");   // remove tracking params
-    const inline = base.replace("/upload/", "/upload/fl_inline/"); // force inline
-    return query ? `${inline}?${query}` : inline;
-  } catch {
-    return url;
-  }
-};
+  const getInlineUrl = (url) => {
+    if (!url) return url;
+    try {
+      return url.replace("/upload/", "/upload/fl_attachment:false/");
+    } catch {
+      return url;
+    }
+  };
+
   return (
     <div className="flex flex-col md:flex-row h-[85vh] border rounded-xl overflow-hidden shadow-md transition-colors duration-300 max-w-full">
       {/* SIDEBAR */}
@@ -432,68 +470,99 @@ const getInlineUrl = (url) => {
                     {groupedMessages[dateKey].map((m, i) => (
                       <div
                         key={m._id || i}
-                        onClick={() => m._id && handleMessageSelect(m._id)}
                         className={`
-                          relative group px-3 py-2 rounded-2xl max-w-[80%] md:max-w-[70%] break-words shadow-sm transition w-fit
-                          ${m.senderId === employeeId ? "cursor-pointer" : ""}
-                          ${m.senderId === employeeId
-                            ? "ml-auto self-end rounded-br-sm" // Always apply alignment for own messages
-                            : "self-start rounded-bl-sm" // Always apply alignment for other's messages
-                          }
-                          ${selectedMessages.includes(m._id)
-                            ? "bg-blue-400 dark:bg-gray-400 text-white" // Selected state
-                            : m.senderId === employeeId
-                              ? "bg-blue-600 text-white" // Own message, not selected
-                              : "bg-gray-200 text-black dark:bg-blue-900 dark:text-white" // Other's message, not selected
-                          }
-                        `}
+        relative group px-3 py-2 rounded-2xl max-w-[80%] md:max-w-[70%] shadow-sm transition w-fit
+        ${m.senderId === employeeId ? "ml-auto bg-blue-600 text-white rounded-br-sm" : "self-start bg-gray-200 text-black dark:bg-blue-900 dark:text-white rounded-bl-sm"}
+        ${selectedMessages.includes(m._id) ? "bg-blue-400 dark:bg-gray-400" : ""}
+      `}
                       >
-                        <div className="whitespace-pre-wrap break-all leading-snug max-w-[220px] sm:max-w-[300px]">
+                        <div className="flex items-end gap-x-2">
 
+                          {/* ---------- IMAGE ---------- */}
                           {m.type === "image" ? (
-                            <img
-                              src={m.message}
-                              className="max-w-[200px] rounded-lg cursor-pointer"
-                              onClick={() => window.open(m.message + "?raw=1", "_blank")} // ⭐ FIXED
-                            />
+                            <div className="relative">
+                              <img
+                                src={m.message}
+                                className="max-w-[200px] rounded-lg cursor-pointer"
+                                onMouseDown={() => startLongPress(m._id)}
+                                onMouseUp={(e) => {
+                                  const shortClick = endLongPress();
+                                  if (shortClick) {
+                                    e.stopPropagation();
+                                    onImagePreview(m.message); // modal
+                                  }
+                                }}
+                                onMouseLeave={endLongPress}
+                              />
+                              {/* Timestamp overlay for image */}
+                              <div className="absolute bottom-1 right-1 bg-black/50 text-white rounded px-1.5 py-0.5 text-xs flex items-center gap-1">
+                                <span>{formatTime(m.createdAt)}</span>
+                                {m.senderId === employeeId && (
+                                  <span>
+                                    {m.isRead ? (
+                                      <CheckCheck size={16} className="text-sky-400" />
+                                    ) : m.isDelivered ? (
+                                      <CheckCheck size={16} />
+                                    ) : (
+                                      <Check size={16} />
+                                    )}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
                           ) : m.type === "file" ? (
-                            <a
-                              href={m.message + "?raw=1"}  // ⭐ FIXED
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 underline break-all flex items-center gap-1"
+
+                            /* ---------- PDF / DOC ---------- */
+                            <span
+                              className="text-blue-600 underline break-all flex items-center gap-1 cursor-pointer"
+                              onMouseDown={() => startLongPress(m._id)}
+                              onMouseUp={(e) => {
+                                const shortClick = endLongPress();
+                                if (shortClick) {
+                                  e.preventDefault();
+                                  window.open(m.message, "_blank"); // open PDF in new tab
+                                }
+                              }}
+                              onMouseLeave={endLongPress}
                             >
                               📄 {m.fileName || "File"}
-                            </a>
-                          ) : (
-                            m.message
-                          )}
-                        </div>
-
-                        {/* Timestamp and Ticks */}
-                        <div className="text-xs mt-1 flex items-center justify-end gap-1 opacity-70">
-                          <span>{formatTime(m.createdAt)}</span>
-                          {m.senderId === employeeId && (
-                            <span>
-                              {m.isRead ? (
-                                // Read: Blue double tick
-                                <CheckCheck size={16} className="text-sky-400" />
-                              ) : m.isDelivered ? (
-                                // Delivered: White/Gray double tick
-                                <CheckCheck size={16} />
-                              ) : m._id ? (
-                                // Sent (and saved in DB): Single tick
-                                <Check size={16} />
-                              ) : (
-                                // Sending (not yet saved): No tick, or a clock icon if you prefer
-                                null
-                              )}
                             </span>
+
+                          ) : (
+
+                            /* ---------- TEXT ---------- */
+                            <div
+                              className="whitespace-pre-wrap break-all"
+                              onClick={() => m.senderId === employeeId && handleMessageSelect(m._id)}
+                            >
+                              {m.message}
+                            </div>
+
+                          )}
+
+                          {/* Time + Ticks for TEXT and FILE messages */}
+                          {m.type !== 'image' && (
+                            <div className="text-xs flex-shrink-0 self-end flex items-center gap-1 opacity-70">
+                              <span>{formatTime(m.createdAt)}</span>
+                              {m.senderId === employeeId && (
+                                <span>
+                                  {m.isRead ? (
+                                    <CheckCheck size={16} className="text-sky-400" />
+                                  ) : m.isDelivered ? (
+                                    <CheckCheck size={16} />
+                                  ) : (
+                                    <Check size={16} />
+                                  )}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
                     ))}
                   </div>
+
                 </div>
               ))}
             </div>
@@ -553,6 +622,33 @@ const getInlineUrl = (url) => {
             Select a {chatType} to start chatting
           </div>
         )}
+        {/* Full Screen Preview Modal */}
+        {previewUrl && previewType === "image" && (
+          <div
+            className="fixed inset-0 bg-black/85 flex items-center justify-center z-[999]"
+            onClick={() => setPreviewUrl(null)}   // Close when clicking outside
+          >
+            {/* Close Button */}
+            <button
+              className="absolute top-3 right-3 text-white text-3xl font-bold bg-black/40 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/60"
+              onClick={(e) => {
+                e.stopPropagation();
+                setPreviewUrl(null);
+              }}
+            >
+              ✕
+            </button>
+
+            {/* Image Preview */}
+            <img
+              src={previewUrl}
+              className="max-w-[95vw] max-h-[95vh] object-contain rounded-lg shadow-lg"
+              onClick={(e) => e.stopPropagation()}   // Prevent closing when clicking the image
+            />
+          </div>
+        )}
+
+
 
         {/* Delete Modal */}
         {showDeleteModal && (
