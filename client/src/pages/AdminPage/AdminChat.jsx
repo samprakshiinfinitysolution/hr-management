@@ -3,7 +3,7 @@ import io from "socket.io-client";
 import API from "../../utils/api";
 import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
-import { Trash2, FileText, X } from "lucide-react";
+import { Trash2, FileText, X, Check, CheckCheck } from "lucide-react";
 import { socket } from "../../socket/socket.js";
 
 export default function AdminChat() {
@@ -204,8 +204,54 @@ export default function AdminChat() {
 
   // ✅ File upload handler
   const handleFileChange = async (e) => {
-    toast.error("File upload is currently disabled.");
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      toast.loading("Uploading file...", { id: "upload" });
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const token = localStorage.getItem("token");
+
+      // 1️⃣ Upload file
+      const res = await API.post("/chat/upload", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const { fileUrl, type, originalName } = res.data; // ⭐ important
+
+      // 2️⃣ Save chat message in DB
+      const msgSend = await API.post("/chat", {
+        senderId: adminId,
+        receiverId: selectedUser._id,
+        message: fileUrl,
+        type,
+        fileName: originalName   // ⭐ REAL FILE NAME SAVE
+      });
+
+      const finalMsg = msgSend.data;
+
+      // 3️⃣ Send through socket
+      socket.emit("sendMessage", finalMsg);
+
+      // 4️⃣ Update UI
+      setMessages(prev => [...prev, finalMsg]);
+
+      toast.success("File sent");
+    } catch (err) {
+      console.error("Admin file upload error:", err);
+      toast.error("Upload failed");
+    } finally {
+      toast.dismiss("upload");
+      e.target.value = "";
+    }
   };
+
 
   // ✅ Delete chat/message
   const confirmDeleteMessage = (msgId) => {
@@ -267,7 +313,31 @@ export default function AdminChat() {
       year: "numeric",
     });
   };
+  const formatTime = (isoString) =>
+    new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+  const getFileName = (url) => {
+    if (!url) return "File";
+
+    try {
+      const clean = url.split("?")[0]; // Remove query params
+      const parts = clean.split("/");
+      const filename = parts[parts.length - 1];
+      return decodeURIComponent(filename);
+    } catch {
+      return "File";
+    }
+  };
+const getInlineUrl = (url) => {
+  if (!url) return "";
+  try {
+    const [base, query] = url.split("?");
+    const inline = base.replace("/upload/", "/upload/fl_inline/");
+    return query ? `${inline}?${query}` : inline;
+  } catch {
+    return url;
+  }
+};
   return (
     <div className="flex flex-col md:flex-row h-[85vh] border rounded-xl overflow-hidden shadow-md transition-colors duration-300 max-w-full">
       {/* SIDEBAR */}
@@ -282,8 +352,8 @@ export default function AdminChat() {
           <button
             onClick={() => setChatType("employee")}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${chatType === "employee"
-                ? "bg-blue-600 text-white"
-                : "border hover:bg-gray-200 hover:text-black cursor-pointer"
+              ? "bg-blue-600 text-white"
+              : "border hover:bg-gray-200 hover:text-black cursor-pointer"
               }`}
           >
             Employees
@@ -291,8 +361,8 @@ export default function AdminChat() {
           <button
             onClick={() => setChatType("admin")}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${chatType === "admin"
-                ? "bg-blue-600 text-white"
-                : "border hover:bg-gray-200 hover:text-black cursor-pointer"
+              ? "bg-blue-600 text-white"
+              : "border hover:bg-gray-200 hover:text-black cursor-pointer"
               }`}
           >
             Admins
@@ -305,14 +375,14 @@ export default function AdminChat() {
                 key={u._id}
                 onClick={() => setSelectedUser(u)}
                 className={`p-3 cursor-pointer rounded-lg text-center md:text-left text-sm font-medium transition flex items-center gap-2 ${selectedUser?._id === u._id
-                    ? "bg-blue-600 text-white"
-                    : "border hover:bg-gray-200 hover:text-black"
+                  ? "bg-blue-600 text-white"
+                  : "border hover:bg-gray-200 hover:text-black"
                   }`}
               >
                 <span
                   className={`w-2 h-2 rounded-full flex-shrink-0 ${onlineUsers.includes(u._id)
-                      ? "bg-green-500"
-                      : "bg-red-500"
+                    ? "bg-green-500"
+                    : "bg-red-500"
                     }`}
                   title={onlineUsers.includes(u._id) ? "Online" : "Offline"}
                 ></span>
@@ -380,44 +450,50 @@ export default function AdminChat() {
                           }
                         `}
                       >
-                        <div className="flex items-end gap-2">
-                          <div className="whitespace-pre-wrap break-words leading-snug">
-                            {m.type === "file" || m.type === "image" ? (
-                              m.message.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
-                                <img
-                                  src={m.message}
-                                  alt="attachment"
-                                  className="max-w-[200px] rounded-lg cursor-pointer hover:opacity-90 transition"
-                                  onClick={() => window.open(m.message, "_blank")}
-                                />
-                              ) : (
-                                <a href={m.message} target="_blank" rel="noopener noreferrer" className="underline text-sm text-blue-200 hover:text-blue-100 break-all">
-                                  <span className="truncate max-w-[calc(100%-2rem)] inline-block text-red-600">
-                                    {decodeURIComponent(m.message.split("/").pop())}
-                                  </span>
-                                </a>
-                              )
-                            ) : (
-                              m.message
-                            )}
-                          </div>
-                          <div className="flex-shrink-0 self-end flex items-center gap-1 text-[10px] opacity-75">
-                          <span>
-                            {new Date(m.createdAt).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
+                        <div className="whitespace-pre-wrap break-all leading-snug max-w-[220px] sm:max-w-[300px]">
+
+                          {m.type === "image" ? (
+                            <img
+                              src={m.message}
+                              className="max-w-[200px] rounded-lg cursor-pointer"
+                              onClick={() => window.open(m.message + "?raw=1", "_blank")} // ⭐ FIXED
+                            />
+                          ) : m.type === "file" ? (
+                            <a
+                              href={m.message + "?raw=1"}  // ⭐ FIXED
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 underline break-all flex items-center gap-1"
+                            >
+                              📄 {m.fileName || "File"}
+                            </a>
+                          ) : (
+                            m.message
+                          )}
+
+
+                        </div>
+
+                        {/* Timestamp and Ticks */}
+                        <div className="text-xs mt-1 flex items-center justify-end gap-1 opacity-70">
+                          <span>{formatTime(m.createdAt)}</span>
                           {m.senderId === adminId && (
-                            <span className="ml-1 flex items-center">
+                            <span>
                               {m.isRead ? (
-                                <span className="text-black text-[11px]">✓✓</span>
+                                // Read: Blue double tick
+                                <CheckCheck size={16} className="text-sky-400" />
+                              ) : m.isDelivered ? (
+                                // Delivered: White/Gray double tick
+                                <CheckCheck size={16} />
+                              ) : m._id ? (
+                                // Sent (and saved in DB): Single tick
+                                <Check size={16} />
                               ) : (
-                                <span className="text-white text-[11px]">✓</span>
+                                // Sending (not yet saved): No tick
+                                null
                               )}
                             </span>
                           )}
-                          </div>
                         </div>
                       </div>
                     ))}
@@ -492,8 +568,8 @@ export default function AdminChat() {
                 {deleteTarget?.type === "message"
                   ? "Delete this message?"
                   : deleteTarget?.type === "messages"
-                  ? `Delete ${deleteTarget.ids.length} message(s)?`
-                  : "Delete entire chat?"}
+                    ? `Delete ${deleteTarget.ids.length} message(s)?`
+                    : "Delete entire chat?"}
               </h3>
               <div className="flex justify-center gap-3 mt-4">
                 <button

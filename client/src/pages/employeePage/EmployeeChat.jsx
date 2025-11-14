@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import API from "../../utils/api";
 import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
-import { Trash2, X } from "lucide-react";
+import { Trash2, X, Check, CheckCheck } from "lucide-react";
 import { socket } from "../../socket/socket.js";
 
 export default function EmployeeChat() {
@@ -206,34 +206,46 @@ export default function EmployeeChat() {
 
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("senderId", employeeId);
-      formData.append("receiverId", selectedUser._id);
 
       const token = localStorage.getItem("token");
 
-      const res = await API.post("/chat", formData, {
+      // 1️⃣ Upload file to Cloudinary
+      const uploadRes = await API.post("/chat/upload", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
           Authorization: `Bearer ${token}`,
         },
       });
 
-      toast.dismiss("upload");
+      const { fileUrl, type, originalName } = uploadRes.data;
 
-      if (res.status === 201 || res.status === 200) {
-        const newMsg = res.data;
-        socket.emit("sendMessage", newMsg);
-        setMessages((prev) => [...prev, newMsg]);
-        toast.success("File sent");
-      } else toast.error("Failed to upload file");
+      // 2️⃣ Save message in DB
+      const msgRes = await API.post("/chat", {
+        senderId: employeeId,               // For EmployeeChat.jsx
+        receiverId: selectedUser._id,
+        message: fileUrl,
+        type,
+        fileName: originalName              // ⭐ REAL FILE NAME HERE
+      });
+
+      const finalMsg = msgRes.data;
+
+      // 3️⃣ Emit socket message
+      socket.emit("sendMessage", finalMsg);
+
+      // 4️⃣ Push in UI
+      setMessages(prev => [...prev, finalMsg]);
+
+      toast.success("File sent");
     } catch (err) {
       console.error("File upload error:", err);
-      toast.dismiss("upload");
       toast.error("Upload failed");
     } finally {
+      toast.dismiss("upload");
       e.target.value = "";
     }
   };
+
 
   // Delete handlers
   const confirmDeleteMessage = (msgId) => {
@@ -298,14 +310,34 @@ export default function EmployeeChat() {
 
   const formatTime = (isoString) =>
     new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const getFileName = (url) => {
+    if (!url) return "File";
 
+    try {
+      const clean = url.split("?")[0]; // Remove query params
+      const parts = clean.split("/");
+      const filename = parts[parts.length - 1];
+      return decodeURIComponent(filename);
+    } catch {
+      return "File";
+    }
+  };
+const getInlineUrl = (url) => {
+  if (!url) return "";
+  try {
+    const [base, query] = url.split("?");   // remove tracking params
+    const inline = base.replace("/upload/", "/upload/fl_inline/"); // force inline
+    return query ? `${inline}?${query}` : inline;
+  } catch {
+    return url;
+  }
+};
   return (
     <div className="flex flex-col md:flex-row h-[85vh] border rounded-xl overflow-hidden shadow-md transition-colors duration-300 max-w-full">
       {/* SIDEBAR */}
       <div
-        className={`w-full md:w-1/3 lg:w-1/4 border-r dark:border-gray-700 p-4 overflow-y-auto ${
-          selectedUser ? "hidden md:block" : "block"
-        }`}
+        className={`w-full md:w-1/3 lg:w-1/4 border-r dark:border-gray-700 p-4 overflow-y-auto ${selectedUser ? "hidden md:block" : "block"
+          }`}
       >
         <h2 className="font-semibold text-lg mb-4 text-blue-600 text-center md:text-left">
           Chat With
@@ -314,21 +346,19 @@ export default function EmployeeChat() {
         <div className="flex justify-center md:justify-start mb-5 gap-2 flex-wrap">
           <button
             onClick={() => setChatType("admin")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              chatType === "admin"
-                ? "bg-blue-600 text-white"
-                : "border hover:bg-gray-200 hover:text-black cursor-pointer"
-            }`}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${chatType === "admin"
+              ? "bg-blue-600 text-white"
+              : "border hover:bg-gray-200 hover:text-black cursor-pointer"
+              }`}
           >
             Admins
           </button>
           <button
             onClick={() => setChatType("employee")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              chatType === "employee"
-                ? "bg-blue-600 text-white"
-                : "border hover:bg-gray-200 hover:text-black cursor-pointer"
-            }`}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${chatType === "employee"
+              ? "bg-blue-600 text-white"
+              : "border hover:bg-gray-200 hover:text-black cursor-pointer"
+              }`}
           >
             Employees
           </button>
@@ -340,18 +370,16 @@ export default function EmployeeChat() {
               <div
                 key={u._id}
                 onClick={() => setSelectedUser(u)}
-                className={`p-3 cursor-pointer rounded-lg text-center md:text-left text-sm font-medium transition flex items-center gap-2 ${
-                  selectedUser?._id === u._id
-                    ? "bg-blue-600 text-white"
-                    : "border hover:bg-gray-200 hover:text-black"
-                }`}
+                className={`p-3 cursor-pointer rounded-lg text-center md:text-left text-sm font-medium transition flex items-center gap-2 ${selectedUser?._id === u._id
+                  ? "bg-blue-600 text-white"
+                  : "border hover:bg-gray-200 hover:text-black"
+                  }`}
               >
                 <span
-                  className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                    onlineUsers.includes(u._id)
-                      ? "bg-green-500"
-                      : "bg-red-500"
-                  }`}
+                  className={`w-2 h-2 rounded-full flex-shrink-0 ${onlineUsers.includes(u._id)
+                    ? "bg-green-500"
+                    : "bg-red-500"
+                    }`}
                   title={onlineUsers.includes(u._id) ? "Online" : "Offline"}
                 ></span>
                 <span>{u.name}</span>
@@ -367,9 +395,8 @@ export default function EmployeeChat() {
 
       {/* CHAT AREA */}
       <div
-        className={`flex-1 flex flex-col relative w-full overflow-hidden ${
-          !selectedUser ? "hidden md:flex" : "flex"
-        }`}
+        className={`flex-1 flex flex-col relative w-full overflow-hidden ${!selectedUser ? "hidden md:flex" : "flex"
+          }`}
       >
         {selectedUser ? (
           <>
@@ -421,24 +448,48 @@ export default function EmployeeChat() {
                           }
                         `}
                       >
-                        <div className="flex items-end gap-2">
-                          <div className="whitespace-pre-wrap break-words leading-snug">
-                            {m.message}
-                          </div>
-                          <div className="flex-shrink-0 self-end flex items-center gap-1 text-[10px] opacity-75">
-                            <span>{formatTime(m.createdAt)}</span>
-                            {m.senderId === employeeId && (
-                              <span className="flex items-center">
-                                {!m.isDelivered && !m.isRead && (
-                                  <span className="text-white">✓</span>
-                                )}
-                                {m.isDelivered && !m.isRead && (
-                                  <span className="text-white">✓✓</span>
-                                )}
-                                {m.isRead && <span className="text-white">✓✓</span>}
-                              </span>
-                            )}
-                          </div>
+                        <div className="whitespace-pre-wrap break-all leading-snug max-w-[220px] sm:max-w-[300px]">
+
+                          {m.type === "image" ? (
+                            <img
+                              src={m.message}
+                              className="max-w-[200px] rounded-lg cursor-pointer"
+                              onClick={() => window.open(m.message + "?raw=1", "_blank")} // ⭐ FIXED
+                            />
+                          ) : m.type === "file" ? (
+                            <a
+                              href={m.message + "?raw=1"}  // ⭐ FIXED
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 underline break-all flex items-center gap-1"
+                            >
+                              📄 {m.fileName || "File"}
+                            </a>
+                          ) : (
+                            m.message
+                          )}
+                        </div>
+
+                        {/* Timestamp and Ticks */}
+                        <div className="text-xs mt-1 flex items-center justify-end gap-1 opacity-70">
+                          <span>{formatTime(m.createdAt)}</span>
+                          {m.senderId === employeeId && (
+                            <span>
+                              {m.isRead ? (
+                                // Read: Blue double tick
+                                <CheckCheck size={16} className="text-sky-400" />
+                              ) : m.isDelivered ? (
+                                // Delivered: White/Gray double tick
+                                <CheckCheck size={16} />
+                              ) : m._id ? (
+                                // Sent (and saved in DB): Single tick
+                                <Check size={16} />
+                              ) : (
+                                // Sending (not yet saved): No tick, or a clock icon if you prefer
+                                null
+                              )}
+                            </span>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -511,8 +562,8 @@ export default function EmployeeChat() {
                 {deleteTarget?.type === "message"
                   ? "Delete this message?"
                   : deleteTarget?.type === "messages"
-                  ? `Delete ${deleteTarget.ids.length} message(s)?`
-                  : "Delete entire chat?"}
+                    ? `Delete ${deleteTarget.ids.length} message(s)?`
+                    : "Delete entire chat?"}
               </h3>
               <div className="flex justify-center gap-3 mt-4">
                 <button
