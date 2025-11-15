@@ -263,36 +263,62 @@ export const getAttendance = async (req, res) => {
   try {
     const { id: userId, role, isMainAdmin } = req.user;
 
+    // Which employees to fetch?
     let empQuery;
     if (isMainAdmin) {
       const subAdmins = await Admin.find({ createdBy: userId }).select("_id");
       const adminIds = [userId, ...subAdmins.map(a => a._id)];
       empQuery = { createdBy: { $in: adminIds } };
+
     } else if (["hr", "manager"].includes(role)) {
       const creatorAdmin = await Admin.findById(req.user.createdBy);
       const orgAdminIds = await Admin.find({ createdBy: creatorAdmin._id }).select("_id");
       const allTeamIds = [creatorAdmin._id, ...orgAdminIds.map(a => a._id)];
       empQuery = { createdBy: { $in: allTeamIds } };
+
     } else {
       empQuery = { createdBy: userId };
     }
+
     const employeeIds = await Employee.find(empQuery).distinct("_id");
 
-    const { date } = req.query;
-    const queryDate = date ? moment(date).tz("Asia/Kolkata") : moment().tz("Asia/Kolkata");
-    const start = queryDate.startOf("day").toDate();
-    const end = queryDate.endOf("day").toDate();
+    // ---- DATE FILTER HANDLING ----
+    const { date, startDate, endDate } = req.query;
 
+    let start, end;
+
+    if (startDate && endDate) {
+      // Reports page
+      start = moment(startDate).tz("Asia/Kolkata").startOf("day").toDate();
+      end = moment(endDate).tz("Asia/Kolkata").endOf("day").toDate();
+
+    } else if (date) {
+      // Attendance tracker page
+      const queryDate = moment(date).tz("Asia/Kolkata");
+      start = queryDate.startOf("day").toDate();
+      end = queryDate.endOf("day").toDate();
+
+    } else {
+      // Default → today's attendance
+      const today = moment().tz("Asia/Kolkata");
+      start = today.startOf("day").toDate();
+      end = today.endOf("day").toDate();
+    }
+
+    // ---- FETCH ATTENDANCE ----  
     const attendance = await Attendance.find({
       user: { $in: employeeIds },
       date: { $gte: start, $lte: end },
     }).populate("user", "name email department position");
 
     res.json(attendance);
+
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // ADMIN/HR/MANAGER CHECK-IN
 export const adminCheckIn = async (req, res) => {
