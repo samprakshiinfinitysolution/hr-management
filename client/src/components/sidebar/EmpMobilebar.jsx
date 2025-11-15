@@ -8,11 +8,13 @@ import {
   IndianRupee,
   Settings,
   Clock,
+  MessageSquare,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
+import { useSelector } from "react-redux";
 
 export default function EmpMobileBar() {
-  const navigate = useNavigate();
+  const isDarkMode = useSelector((state) => state.settings.isDarkMode);
 
   const menuItems = [
     { name: "Home", icon: <Home size={22} />, path: "/employee" },
@@ -20,8 +22,9 @@ export default function EmpMobileBar() {
     { name: "Tasks", icon: <FileText size={22} />, path: "/employee/tasks" },
     { name: "EOD Report", icon: <Clock size={20} />, path: "/employee/eod-reports" },
     { name: "Leave", icon: <BedSingle size={22} />, path: "/employee/leave" },
+    { name: "Chat", icon: <MessageSquare size={22} />, path: "/employee/chat" },
     { name: "Profile", icon: <User size={22} />, path: "/employee/profile" },
-    { name: "Salary", icon: <IndianRupee size={22} />, path: "/employee/salary-slip" },
+    { name: "Salary Slip", icon: <IndianRupee size={22} />, path: "/employee/salary-slip" },
     { name: "Settings", icon: <Settings size={22} />, path: "/employee/setting" },
   ];
 
@@ -30,14 +33,20 @@ export default function EmpMobileBar() {
       {/* Icon Row */}
       <div className="flex justify-around items-center py-2">
         {menuItems.map((item) => (
-          <button
+          <NavLink
             key={item.name}
-            onClick={() => navigate(item.path)}
-            className="flex flex-col items-center text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-white transition-all"
+            to={item.path}
+            className={({ isActive }) =>
+              `flex flex-col items-center justify-center w-16 p-1 rounded-md transition-colors ${
+                isActive
+                  ? "text-blue-600 dark:text-white"
+                  : "text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-white"
+              }`
+            }
           >
             {item.icon}
-            <span className="text-[11px] mt-1">{item.name}</span>
-          </button>
+            <span className="text-[11px] mt-1">{item.name.split(" ")[0]}</span>
+          </NavLink>
         ))}
       </div>
     </div>
