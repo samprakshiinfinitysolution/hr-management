@@ -6,7 +6,8 @@ import { fileURLToPath } from "url";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import chatSocket from "./sockets/chatSocket.js";
-
+import cron from "node-cron";
+import { autoCheckOut } from "./controllers/attendanceController.js";
 import { port, mongourl } from "./config/config.js";
 
 // Routes
@@ -83,7 +84,12 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/policies", policyRoutes);
 app.use("/api/eod", eodRoutes);
 app.use("/api", employeeRoutes); 
-// ✅ Health check
+
+// Run auto-checkout every 1 minute
+cron.schedule("*/1 * * * *", () => {
+  console.log("⏳ Auto-checkout checking...");
+  autoCheckOut();
+});
 app.get("/", (req, res) => {
   res.send("✅ HR Management Backend Running Successfully!");
 });

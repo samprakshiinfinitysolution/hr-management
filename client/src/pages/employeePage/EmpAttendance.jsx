@@ -45,6 +45,7 @@ export default function EmpAttendance() {
   const [history, setHistory] = useState([]);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [hasLoggedInToday, setHasLoggedInToday] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const navigate = useNavigate();
   const { user, token } = useSelector((state) => state.auth);
@@ -249,25 +250,24 @@ export default function EmpAttendance() {
           <button
             onClick={handleLogin}
             disabled={!!loginTime}
-            className={`flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-semibold text-white transition ${
-              loginTime
-                ? "bg-green-400 dark:bg-green-700 cursor-not-allowed"
-                : "bg-green-500 hover:bg-green-600"
-            }`}
+            className={`flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-semibold text-white transition ${loginTime
+              ? "bg-green-400 dark:bg-green-700 cursor-not-allowed"
+              : "bg-green-500 hover:bg-green-600"
+              }`}
           >
             <LogIn size={20} /> {loginTime ? "Logged In" : "Login"}
           </button>
           <button
-            onClick={handleCheckout}
+            onClick={() => setShowLogoutModal(true)}   // ⬅ Instead of handleCheckout()
             disabled={!loginTime || !!checkoutTime}
-            className={`flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-semibold text-white transition ${
-              !loginTime || checkoutTime
-                ? "bg-red-400 dark:bg-red-800 cursor-not-allowed"
-                : "bg-red-500 hover:bg-red-600"
-            }`}
+            className={`flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-semibold text-white transition ${!loginTime || checkoutTime
+              ? "bg-red-400 dark:bg-red-800 cursor-not-allowed"
+              : "bg-red-500 hover:bg-red-600"
+              }`}
           >
             <LogOut size={20} /> {checkoutTime ? "Checked Out" : "Checkout"}
           </button>
+
         </div>
 
         {/* Lunch Break Buttons */}
@@ -275,22 +275,20 @@ export default function EmpAttendance() {
           <button
             onClick={handleLunchStart}
             disabled={!loginTime || !!lunchStartTime || !!checkoutTime}
-            className={`flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-semibold text-white transition ${
-              !loginTime || !!lunchStartTime || !!checkoutTime
-                ? "bg-gray-400 dark:bg-gray-700 cursor-not-allowed"
-                : "bg-yellow-500 hover:bg-yellow-600"
-            }`}
+            className={`flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-semibold text-white transition ${!loginTime || !!lunchStartTime || !!checkoutTime
+              ? "bg-gray-400 dark:bg-gray-700 cursor-not-allowed"
+              : "bg-yellow-500 hover:bg-yellow-600"
+              }`}
           >
             <Coffee size={20} /> {lunchStartTime ? "On Break" : "On Lunch Break"}
           </button>
           <button
             onClick={handleLunchEnd}
             disabled={!lunchStartTime || !!lunchEndTime || !!checkoutTime}
-            className={`flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-semibold text-white transition ${
-              !lunchStartTime || !!lunchEndTime || !!checkoutTime
-                ? "bg-gray-400 dark:bg-gray-700 cursor-not-allowed"
-                : "bg-cyan-500 hover:bg-cyan-600"
-            }`}
+            className={`flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-semibold text-white transition ${!lunchStartTime || !!lunchEndTime || !!checkoutTime
+              ? "bg-gray-400 dark:bg-gray-700 cursor-not-allowed"
+              : "bg-cyan-500 hover:bg-cyan-600"
+              }`}
           >
             <Briefcase size={20} /> {lunchEndTime ? "Resumed" : "Back to Work"}
           </button>
@@ -335,6 +333,38 @@ export default function EmpAttendance() {
             <Check size={20} /> View Last 10 Days
           </button>
         </div>
+        {showLogoutModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl w-full max-w-sm text-center">
+              <h3 className="text-xl font-semibold mb-4 text-red-600">
+                Confirm Checkout
+              </h3>
+
+              <p className="mb-6 text-gray-700 dark:text-gray-300">
+                Are you sure you want to checkout?
+              </p>
+
+              <div className="flex justify-center gap-4">
+                <button
+                  onClick={() => setShowLogoutModal(false)}
+                  className="px-4 py-2 bg-gray-300 dark:bg-gray-600 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowLogoutModal(false);
+                    handleCheckout();         
+                  }}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                >
+                  Yes, Checkout
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {isSummaryOpen && (
           <div className="fixed inset-0 bg-opacity-50 flex items-center justify-center z-50 p-4 bg-black/50">
@@ -356,12 +386,12 @@ export default function EmpAttendance() {
                       remark === "Late Login"
                         ? "text-red-500"
                         : remark === "Half Day"
-                        ? "text-yellow-500"
-                        : remark === "Early Checkout"
-                        ? "text-red-400"
-                        : remark === "Present"
-                        ? "text-green-600"
-                        : "text-gray-500";
+                          ? "text-yellow-500"
+                          : remark === "Early Checkout"
+                            ? "text-red-400"
+                            : remark === "Present"
+                              ? "text-green-600"
+                              : "text-gray-500";
                     return (
                       <div
                         key={i}

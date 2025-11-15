@@ -132,44 +132,57 @@ export const checkOut = async (req, res) => {
 // AUTO CHECKOUT
 export const autoCheckOut = async () => {
   try {
-    // Find all main admins to get their settings
-    const mainAdmins = await Admin.find({ isMainAdmin: true }).select('attendanceSettings createdBy');
-    const adminSettingsMap = new Map(mainAdmins.map(admin => [admin._id.toString(), admin.attendanceSettings]));
+    const mainAdmins = await Admin.find({ isMainAdmin: true })
+      .select("attendanceSettings createdBy");
+
+    const adminSettingsMap = new Map(
+      mainAdmins.map(admin => [admin._id.toString(), admin.attendanceSettings])
+    );
 
     const now = moment().tz("Asia/Kolkata");
-    const sixPM = now.clone().hour(18).minute(0).second(0);
-    if (now.isBefore(sixPM)) return;
-
     const today = new Date(now.format("YYYY-MM-DD"));
 
+    // Find pending employees who have NOT checked out
     const pending = await Attendance.find({
       date: today,
       checkIn: { $exists: true },
-      checkOut: { $exists: false },
-    }).populate('user', 'createdBy');
+      checkOut: { $exists: false }
+    }).populate("user", "createdBy");
 
     for (const att of pending) {
-      const userCreatedBy = att.user?.createdBy?.toString();
-      const settings = adminSettingsMap.get(userCreatedBy) || {};
+      const userAdminId = att.user?.createdBy?.toString();
+      const settings = adminSettingsMap.get(userAdminId) || {};
+
+      // Dynamic time (default: 18:00)
       const autoCheckoutTime = settings.autoCheckoutTime || "18:00";
-      const [autoHour, autoMin] = autoCheckoutTime.split(':').map(Number);
-      const autoCheckoutMoment = now.clone().hour(autoHour).minute(autoMin).second(0);
+      const [h, m] = autoCheckoutTime.split(":").map(Number);
 
-      att.checkOut = autoCheckoutMoment.toDate();
-      att.logout = autoCheckoutMoment.format("HH:mm");
+      const checkoutMoment = moment().tz("Asia/Kolkata")
+        .hour(h)
+        .minute(m)
+        .second(0);
 
-      const diffMs = att.checkOut.getTime() - att.checkIn.getTime();
+      // Only auto-checkout if current time is AFTER the autoCheckoutTime
+      if (now.isBefore(checkoutMoment)) continue;
+
+      att.checkOut = checkoutMoment.toDate();
+      att.logout = checkoutMoment.format("HH:mm");
+
+      const diffMs = att.checkOut - att.checkIn;
       att.totalHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
-      att.remark = getRemark(att.login, att.logout, settings);
-      att.status = att.remark;
+
+      att.status = getRemark(att.login, att.logout, settings);
+      att.remark = att.status;
+
       await att.save();
     }
 
-    console.log(`Auto checkout completed for ${pending.length} employees`);
+    console.log(`Auto-checkout done for ${pending.length} users`);
   } catch (err) {
     console.error("Auto checkout error:", err);
   }
 };
+
 
 // GET MY ATTENDANCE (Employee)
 export const getMyAttendance = async (req, res) => {
@@ -284,13 +297,13 @@ export const getAttendance = async (req, res) => {
 // ADMIN/HR/MANAGER CHECK-IN
 export const adminCheckIn = async (req, res) => {
   try {
-    const adminId = req.user.id; 
+    const adminId = req.user.id;
     const now = moment().tz("Asia/Kolkata");
     const dateOnly = new Date(now.format("YYYY-MM-DD"));
     const timeStr = now.format("HH:mm");
 
     let att = await Attendance.findOne({ user: adminId, date: dateOnly });
-    
+
     if (att && att.checkIn) {
       return res.status(400).json({ message: "Already checked in today" });
     }
