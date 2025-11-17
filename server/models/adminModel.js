@@ -44,7 +44,7 @@ const adminSchema = new mongoose.Schema({
   attendanceSettings: {
     officeStartTime: { type: String, default: "10:00" },
     lateGraceMinutes: { type: Number, default: 15 },
-    halfDayCutoff: { type: String, default: "11:00" },
+    halfDayLoginCutoff: { type: String, default: "10:15" }, // Standardized name and default
     officeEndTime: { type: String, default: "18:00" },
     halfDayCheckoutCutoff: { type: String, default: "17:00" },
     autoCheckoutTime: { type: String, default: "18:00" },

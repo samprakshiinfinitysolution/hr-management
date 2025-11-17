@@ -442,54 +442,39 @@ export const verifyEmployee = async (req, res) => {
  */
 export const updateAdminSettings = async (req, res) => {
   try {
-    // ✅ Only main admin can change org-wide attendance settings
     if (!req.user?.isMainAdmin) {
-      return res
-        .status(403)
-        .json({ message: "Access denied. Only main admin can update settings." });
+      return res.status(403).json({ message: "Access denied. Only main admin can update settings." });
     }
 
-    const {
-      officeStartTime,
-      lateGraceMinutes,
-      halfDayCutoff,
-      officeEndTime,
-      halfDayCheckoutCutoff,
-      autoCheckoutTime,
-      ...rest
-    } = req.body;
+    const payload = req.body || {};
+    // Ensure numeric conversion for minutes
+    if (payload.lateGraceMinutes !== undefined) {
+      payload.lateGraceMinutes = Number(payload.lateGraceMinutes);
+    }
+
+    // Use a clean object with only the allowed settings
+    const canonical = {
+      officeStartTime: payload.officeStartTime ?? payload.office_start_time,
+      officeEndTime: payload.officeEndTime ?? payload.office_end_time,
+      lateGraceMinutes: payload.lateGraceMinutes,
+      halfDayLoginCutoff: payload.halfDayLoginCutoff, // Use the standardized name
+      halfDayCheckoutCutoff: payload.halfDayCheckoutCutoff ?? payload.half_day_checkout_cutoff,
+      autoCheckoutTime: payload.autoCheckoutTime ?? payload.auto_checkout_time,
+    };
 
     const admin = await Admin.findById(req.user.id);
-    if (!admin) {
-      return res.status(404).json({ message: "Admin not found" });
-    }
+    if (!admin) return res.status(404).json({ message: "Admin not found" });
 
-    // ✅ Merge provided fields into admin.attendanceSettings
     admin.attendanceSettings = {
-      ...(admin.attendanceSettings?.toObject?.() ??
-        admin.attendanceSettings ??
-        {}),
-      ...(officeStartTime !== undefined && { officeStartTime }),
-      ...(lateGraceMinutes !== undefined && { lateGraceMinutes }),
-      ...(halfDayCutoff !== undefined && { halfDayCutoff }),
-      ...(officeEndTime !== undefined && { officeEndTime }),
-      ...(halfDayCheckoutCutoff !== undefined && { halfDayCheckoutCutoff }),
-      ...(autoCheckoutTime !== undefined && { autoCheckoutTime }),
-      ...rest,
+      ...(admin.attendanceSettings ? admin.attendanceSettings.toObject?.() ?? admin.attendanceSettings : {}),
+      ...Object.fromEntries(Object.entries(canonical).filter(([_, v]) => v !== undefined))
     };
 
     await admin.save();
-
-    return res.json({
-      message: "Attendance settings updated successfully",
-      attendanceSettings: admin.attendanceSettings,
-    });
-  } catch (error) {
-    console.error("Error updating admin settings:", error);
-    return res.status(500).json({
-      message: "Failed to update settings",
-      error: error.message,
-    });
+    return res.json({ message: "Attendance settings updated", attendanceSettings: admin.attendanceSettings });
+  } catch (err) {
+    console.error("updateAdminSettings error:", err);
+    return res.status(500).json({ message: "Failed to update settings", error: err.message });
   }
 };
 

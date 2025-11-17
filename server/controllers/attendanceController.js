@@ -5,37 +5,58 @@ import Admin from "../models/adminModel.js";
 import dayjs from "dayjs";
 import moment from "moment-timezone";
 
+
+// normalizeSettings
+const normalizeSettings = (raw = {}) => {
+  return {
+    officeStartTime: raw.officeStartTime || "10:00",
+    lateGraceMinutes: Number(raw.lateGraceMinutes ?? 15),
+
+    // HALF DAY (LOGIN SIDE)
+    halfDayLoginCutoff: raw.halfDayLoginCutoff || "10:15",
+
+    // END TIME
+    officeEndTime: raw.officeEndTime || "18:00",
+
+    // HALF DAY (LOGOUT SIDE)
+    halfDayCheckoutCutoff: raw.halfDayCheckoutCutoff || "17:00",
+
+    // AUTO LOGOUT
+    autoCheckoutTime: raw.autoCheckoutTime || "18:00",
+  };
+};
+
 // UTIL: REMARK LOGIC
 const getRemark = (login, logout, settings = {}) => {
   if (!login || !logout) return "Incomplete";
 
-  const [loginHour, loginMin] = login.split(":").map(Number);
-  const [logoutHour, logoutMin] = logout.split(":").map(Number);
-  const loginMins = loginHour * 60 + loginMin;
-  const logoutMins = logoutHour * 60 + logoutMin;
+  const cfg = normalizeSettings(settings);
+  const toMins = (hhmm) => {
+    const [h, m] = String(hhmm).split(":").map(Number);
+    return h * 60 + m;
+  };
 
-  // Default values if settings are not provided
-  const officeStartTime = settings.officeStartTime || "10:00";
-  const lateGraceMinutes = settings.lateGraceMinutes || 10;
-  const halfDayCutoff = settings.halfDayCutoff || "16:00"; // 4 PM
-  const officeEndTime = settings.officeEndTime || "18:00"; // 6 PM
+  const loginMins = toMins(login);
+  const logoutMins = toMins(logout);
 
-  const [startHour, startMin] = officeStartTime.split(":").map(Number);
-  const officeStartMins = startHour * 60 + startMin;
+  const officeStart = toMins(cfg.officeStartTime);
+  const lateGrace = cfg.lateGraceMinutes;
+  const halfDayLoginCutoff = toMins(cfg.halfDayLoginCutoff);
 
-  const [halfDayHour, halfDayMin] = halfDayCutoff.split(":").map(Number);
-  const halfDayMins = halfDayHour * 60 + halfDayMin;
+  const halfDayCheckoutCutoff = toMins(cfg.halfDayCheckoutCutoff);
+  const officeEnd = toMins(cfg.officeEndTime);
 
-  const [endHour, endMin] = officeEndTime.split(":").map(Number);
-  const officeEndMins = endHour * 60 + endMin;
+  // ✔ LOGIN LOGIC
+  if (loginMins > halfDayLoginCutoff) return "Half Day";
+  if (loginMins > officeStart + lateGrace) return "Late Login";
 
-  // Logic using settings
-  if (loginMins > officeStartMins + lateGraceMinutes) return "Late Login";
-  if (logoutMins < halfDayMins) return "Half Day";
-  if (logoutMins < officeEndMins) return "Early Checkout";
+  // ✔ LOGOUT LOGIC
+  if (logoutMins < halfDayCheckoutCutoff) return "Half Day";
+  if (logoutMins < officeEnd) return "Early Checkout";
 
   return "Present";
 };
+
 
 // CHECK-IN
 export const checkIn = async (req, res) => {
@@ -44,11 +65,11 @@ export const checkIn = async (req, res) => {
     const employee = await Employee.findById(employeeId);
     if (!employee) return res.status(404).json({ message: "Employee not found" });
 
-    const adminSettings = await Admin.findById(employee.createdBy).select('attendanceSettings');
-    const adminId = employee.createdBy;
+    const adminSettingsRaw = await Admin.findById(employee.createdBy).select("attendanceSettings");
+    const settings = normalizeSettings(adminSettingsRaw?.attendanceSettings || {});
 
     const now = moment().tz("Asia/Kolkata");
-    const dateOnly = new Date(now.format("YYYY-MM-DD"));
+    const dateOnly = new Date(now.format("YYYY-MM-DD")); // date field saved as midnight local
     const timeStr = now.format("HH:mm");
 
     let att = await Attendance.findOne({ user: employeeId, date: dateOnly });
@@ -60,7 +81,7 @@ export const checkIn = async (req, res) => {
     if (!att) {
       att = new Attendance({
         user: employeeId,
-        createdBy: adminId,
+        createdBy: employee.createdBy,
         date: dateOnly,
         checkIn: now.toDate(),
         login: timeStr,
@@ -70,25 +91,27 @@ export const checkIn = async (req, res) => {
       att.login = timeStr;
     }
 
-    const settings = adminSettings?.attendanceSettings || {};
-    const officeStartTime = settings.officeStartTime || "10:00";
-    const lateGraceMinutes = settings.lateGraceMinutes || 10;
-    const halfDayLoginCutoff = settings.halfDayLoginCutoff || "11:00";
+    // Determine status using halfDayLoginCutoff (login-side cutoff)
+    const loginMins = now.hour() * 60 + now.minute();
+    const halfDayLoginMins = (() => {
+      const [h, m] = (settings.halfDayLoginCutoff || "11:00").split(":").map(Number);
+      return h * 60 + m;
+    })();
+    const officeStartMins = (() => {
+      const [h, m] = (settings.officeStartTime || "10:00").split(":").map(Number);
+      return h * 60 + m;
+    })();
 
-    const loginTime = now.hour() * 60 + now.minute();
-    const [halfDayLoginHour, halfDayLoginMin] = halfDayLoginCutoff.split(':').map(Number);
-    const [startHour, startMin] = officeStartTime.split(':').map(Number);
-
-    if (loginTime > halfDayLoginHour * 60 + halfDayLoginMin) att.status = "Half Day";
-    else if (loginTime > startHour * 60 + startMin + lateGraceMinutes) att.status = "Late";
+    if (loginMins > halfDayLoginMins) att.status = "Half Day";
+    else if (loginMins > officeStartMins + (settings.lateGraceMinutes || 0)) att.status = "Late";
     else att.status = "Present";
 
     att.remark = att.status;
     await att.save();
-
-    res.json({ message: "Checked in successfully", att });
+    return res.json({ message: "Checked in successfully", att });
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    console.error("checkIn error:", err);
+    return res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -107,14 +130,12 @@ export const checkOut = async (req, res) => {
     }
 
     const employee = await Employee.findById(employeeId);
-    const adminSettings = await Admin.findById(employee.createdBy).select('attendanceSettings');
-    const settings = adminSettings?.attendanceSettings || {};
+    const adminSettingsRaw = await Admin.findById(employee.createdBy).select("attendanceSettings");
+    const settings = normalizeSettings(adminSettingsRaw?.attendanceSettings || {});
 
     const now = moment().tz("Asia/Kolkata");
-    const timeStr = now.format("HH:mm");
-
     att.checkOut = now.toDate();
-    att.logout = timeStr;
+    att.logout = now.format("HH:mm");
 
     const diffMs = att.checkOut.getTime() - att.checkIn.getTime();
     att.totalHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
@@ -123,63 +144,68 @@ export const checkOut = async (req, res) => {
     att.status = att.remark;
 
     await att.save();
-    res.json({ message: "Checked out successfully", att });
+    return res.json({ message: "Checked out successfully", att });
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    console.error("checkOut error:", err);
+    return res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // AUTO CHECKOUT
 export const autoCheckOut = async () => {
   try {
-    const mainAdmins = await Admin.find({ isMainAdmin: true })
-      .select("attendanceSettings createdBy");
+    // load all admins who may have settings (main admins or all admins depending on model)
+    const admins = await Admin.find({}).select("_id attendanceSettings");
 
-    const adminSettingsMap = new Map(
-      mainAdmins.map(admin => [admin._id.toString(), admin.attendanceSettings])
-    );
+    // Build map of adminId -> normalized settings
+    const adminSettingsMap = new Map();
+    admins.forEach(a => adminSettingsMap.set(String(a._id), normalizeSettings(a.attendanceSettings || {})));
 
     const now = moment().tz("Asia/Kolkata");
-    const today = new Date(now.format("YYYY-MM-DD"));
+    const todayStart = now.clone().startOf("day").toDate();
+    const todayEnd = now.clone().endOf("day").toDate();
 
-    // Find pending employees who have NOT checked out
+    // find pending attendance records for today where checkIn exists and checkOut missing
     const pending = await Attendance.find({
-      date: today,
+      date: { $gte: todayStart, $lte: todayEnd },
       checkIn: { $exists: true },
       checkOut: { $exists: false }
     }).populate("user", "createdBy");
 
+    let processed = 0;
+
     for (const att of pending) {
-      const userAdminId = att.user?.createdBy?.toString();
-      const settings = adminSettingsMap.get(userAdminId) || {};
+      const adminId = String(att.user?.createdBy);
+      const settings = adminSettingsMap.get(adminId) || normalizeSettings({});
 
-      // Dynamic time (default: 18:00)
-      const autoCheckoutTime = settings.autoCheckoutTime || "18:00";
-      const [h, m] = autoCheckoutTime.split(":").map(Number);
+      const [autoHour, autoMin] = (settings.autoCheckoutTime || "18:00").split(":").map(Number);
+      // Build the expected auto-checkout moment *for today* in Asia/Kolkata
+      const expected = moment().tz("Asia/Kolkata").startOf("day").hour(autoHour).minute(autoMin).second(0);
 
-      const checkoutMoment = moment().tz("Asia/Kolkata")
-        .hour(h)
-        .minute(m)
-        .second(0);
+      // only do auto-checkout if current time is on/after expected auto checkout
+      if (now.isBefore(expected)) {
+        // skip for now
+        continue;
+      }
 
-      // Only auto-checkout if current time is AFTER the autoCheckoutTime
-      if (now.isBefore(checkoutMoment)) continue;
+      // set checkout to expected time (so hours reflect correct)
+      att.checkOut = expected.toDate();
+      att.logout = expected.format("HH:mm");
 
-      att.checkOut = checkoutMoment.toDate();
-      att.logout = checkoutMoment.format("HH:mm");
-
-      const diffMs = att.checkOut - att.checkIn;
+      const diffMs = att.checkOut.getTime() - att.checkIn.getTime();
       att.totalHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
 
-      att.status = getRemark(att.login, att.logout, settings);
-      att.remark = att.status;
+      att.remark = getRemark(att.login, att.logout, settings);
+      att.status = att.remark;
 
       await att.save();
+      processed++;
     }
 
-    console.log(`Auto-checkout done for ${pending.length} users`);
+    console.log(`autoCheckOut: processed ${processed} attendance records (pending ${pending.length})`);
   } catch (err) {
-    console.error("Auto checkout error:", err);
+    console.error("autoCheckOut error:", err);
   }
 };
 
@@ -263,59 +289,47 @@ export const getAttendance = async (req, res) => {
   try {
     const { id: userId, role, isMainAdmin } = req.user;
 
-    // Which employees to fetch?
     let empQuery;
     if (isMainAdmin) {
       const subAdmins = await Admin.find({ createdBy: userId }).select("_id");
       const adminIds = [userId, ...subAdmins.map(a => a._id)];
       empQuery = { createdBy: { $in: adminIds } };
-
     } else if (["hr", "manager"].includes(role)) {
       const creatorAdmin = await Admin.findById(req.user.createdBy);
       const orgAdminIds = await Admin.find({ createdBy: creatorAdmin._id }).select("_id");
       const allTeamIds = [creatorAdmin._id, ...orgAdminIds.map(a => a._id)];
       empQuery = { createdBy: { $in: allTeamIds } };
-
     } else {
       empQuery = { createdBy: userId };
     }
-
     const employeeIds = await Employee.find(empQuery).distinct("_id");
 
-    // ---- DATE FILTER HANDLING ----
+    // date, startDate, endDate logic (timezone-aware)
     const { date, startDate, endDate } = req.query;
-
     let start, end;
 
     if (startDate && endDate) {
-      // Reports page
       start = moment(startDate).tz("Asia/Kolkata").startOf("day").toDate();
       end = moment(endDate).tz("Asia/Kolkata").endOf("day").toDate();
-
     } else if (date) {
-      // Attendance tracker page
-      const queryDate = moment(date).tz("Asia/Kolkata");
-      start = queryDate.startOf("day").toDate();
-      end = queryDate.endOf("day").toDate();
-
+      const q = moment(date).tz("Asia/Kolkata");
+      start = q.startOf("day").toDate();
+      end = q.endOf("day").toDate();
     } else {
-      // Default → today's attendance
       const today = moment().tz("Asia/Kolkata");
       start = today.startOf("day").toDate();
       end = today.endOf("day").toDate();
     }
 
-    // ---- FETCH ATTENDANCE ----  
     const attendance = await Attendance.find({
       user: { $in: employeeIds },
-      date: { $gte: start, $lte: end },
-    }).populate("user", "name email department position");
+      date: { $gte: start, $lte: end }
+    }).populate("user", "name email department position").sort({ date: -1 });
 
-    res.json(attendance);
-
+    return res.json(attendance);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("getAttendance error:", err);
+    return res.status(500).json({ message: "Server error" });
   }
 };
 

@@ -7,7 +7,7 @@ import {
   toggleDarkMode,
   toggleEmailNotifications,
 } from "../../features/auth/settingsSlice";
-import API from "../../utils/api"; 
+import API from "../../utils/api";
 import { Trash2, Pencil, Save, ShieldCheck, LogIn, Clock, AlertTriangle, LogOut, Power } from "lucide-react";
 
 
@@ -59,22 +59,20 @@ export default function AdminSettings() {
   const [defaultSettings, setdefaultSettings] = useState({
     officeStartTime: "10:00",
     lateGraceMinutes: 15,
-    halfDayCutoff: "11:00",
+    halfDayLoginCutoff:"10:15",
     officeEndTime: "18:00",
-    earlyCheckoutGraceMinutes: 0,
     halfDayCheckoutCutoff: "17:00",
     autoCheckoutTime: "18:00",
   });
   // Office Time Settings
- const [officeSettings, setOfficeSettings] = useState({
-   officeStartTime: " ",
-    lateGraceMinutes: " ",
-    halfDayCutoff: " ",
-    officeEndTime: " ",
-    earlyCheckoutGraceMinutes: 0,
-    halfDayCheckoutCutoff: " ",
+  const [officeSettings, setOfficeSettings] = useState({
+    officeStartTime: "",
+    lateGraceMinutes: "",
+    halfDayLoginCutoff: "",
+    officeEndTime: "",
+    halfDayCheckoutCutoff: "",
     autoCheckoutTime: "",
-});
+  });
   const [loadingOfficeSettings, setLoadingOfficeSettings] = useState(true);
   // Load data
   useEffect(() => {
@@ -112,29 +110,29 @@ export default function AdminSettings() {
     };
 
     const fetchOfficeSettings = async () => {
-  if (!isAdmin) return;
+      if (!isAdmin) return;
 
-  setLoadingOfficeSettings(true);
-  try {
-    const { data } = await API.get("/admin/settings");
+      setLoadingOfficeSettings(true);
+      try {
+        const { data } = await API.get("/admin/settings");
 
-    if (data && data.attendanceSettings) {
-      // ✅ Load saved data from DB
-      setOfficeSettings((prev) => ({
-        ...prev,
-        ...data.attendanceSettings,
-      }));
-    } else {
-      // ✅ If DB has nothing yet, fall back to defaults
-      setOfficeSettings(defaultSettings);
-    }
-  } catch (error) {
-    console.error("Failed to fetch office settings:", error);
-    toast.error("Could not fetch office time settings.");
-  } finally {
-    setLoadingOfficeSettings(false);
-  }
-};
+        if (data && data.attendanceSettings) {
+          // ✅ Load saved data from DB
+          setOfficeSettings((prev) => ({
+            ...prev,
+            ...data.attendanceSettings,
+          }));
+        } else {
+          // ✅ If DB has nothing yet, fall back to defaults
+          setOfficeSettings(defaultSettings);
+        }
+      } catch (error) {
+        console.error("Failed to fetch office settings:", error);
+        toast.error("Could not fetch office time settings.");
+      } finally {
+        setLoadingOfficeSettings(false);
+      }
+    };
 
 
     fetchProfile();
@@ -188,27 +186,27 @@ export default function AdminSettings() {
     }));
   };
 
- const handleOfficeSettingsSave = async (e) => {
-  e.preventDefault();
+  const handleOfficeSettingsSave = async (e) => {
+    e.preventDefault();
 
-  toast.promise(API.put("/admin/settings", officeSettings), {
-    loading: "Saving office settings...",
-    success: async (res) => {
-      if (res.data?.attendanceSettings) {
-        setOfficeSettings(res.data.attendanceSettings);
-      }
+    toast.promise(API.put("/admin/settings", officeSettings), {
+      loading: "Saving office settings...",
+      success: async (res) => {
+        if (res.data?.attendanceSettings) {
+          setOfficeSettings(res.data.attendanceSettings);
+        }
 
-      // ✅ Immediately fetch fresh data from DB to ensure state matches saved values
-      const { data } = await API.get("/admin/settings");
-      if (data?.attendanceSettings) {
-        setOfficeSettings(data.attendanceSettings);
-      }
+        // ✅ Immediately fetch fresh data from DB to ensure state matches saved values
+        const { data } = await API.get("/admin/settings");
+        if (data?.attendanceSettings) {
+          setOfficeSettings(data.attendanceSettings);
+        }
 
-      return "Office settings updated successfully!";
-    },
-    error: "Failed to update office settings.",
-  });
-};
+        return "Office settings updated successfully!";
+      },
+      error: "Failed to update office settings.",
+    });
+  };
 
   // Profile update
   const handleProfileUpdate = async () => {
@@ -374,11 +372,11 @@ export default function AdminSettings() {
                   />
                   <SettingInput
                     label="Half-day Login Cutoff"
-                    name="halfDayCutoff"
+                    name="halfDayLoginCutoff"
                     type="time"
-                    value={officeSettings.halfDayCutoff}
+                    value={officeSettings.halfDayLoginCutoff}
                     onChange={handleOfficeSettingsChange}
-                    icon={<AlertTriangle size={16} className="text-gray-400" />}
+                    icon={<AlertTriangle size={16} />}
                   />
                   <SettingInput
                     label="Office End Time"

@@ -9,6 +9,7 @@ import {
   Settings,
   Clock,
   MessageSquare,
+  BookText,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useSelector } from "react-redux";
@@ -25,6 +26,7 @@ export default function EmpMobileBar() {
     { name: "Chat", icon: <MessageSquare size={22} />, path: "/employee/chat" },
     { name: "Profile", icon: <User size={22} />, path: "/employee/profile" },
     { name: "Salary Slip", icon: <IndianRupee size={22} />, path: "/employee/salary-slip" },
+    { name: "Policies", icon: <BookText size={22} />, path: "/employee/policy" },
     { name: "Settings", icon: <Settings size={22} />, path: "/employee/setting" },
   ];
 
