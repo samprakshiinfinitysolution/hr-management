@@ -67,14 +67,22 @@ export default function EmpNavbar({ toggleSidebar }) {
   };
 
   const handleLogout = () => {
+    toast.success("Logout successfully");
     localStorage.removeItem("token");
     localStorage.removeItem("role");
     navigate("/");
   };
 
+  const handleDarkToggle = () => {
+    dispatch(toggleDarkMode());
+    toast.success(isDarkMode ? "Light mode enabled" : "Dark mode enabled", {
+      id: "dark-mode-toast",
+    });
+  };
+
   return (
     <header
-      className="fixed top-0 left-0 right-0 p-4 shadow-md flex justify-between items-center z-50 transition-colors duration-300 bg-blue-600 text-white dark:bg-gray-900 dark:text-white"
+      className="fixed top-0 left-0 right-0 p-4 shadow-md flex justify-between items-center z-50 transition-colors duration-300 bg-blue-600 text-white"
     >
       <div className="flex items-center gap-3">
         <button
@@ -95,7 +103,7 @@ export default function EmpNavbar({ toggleSidebar }) {
 
         {/* --- Dark Mode Toggle --- */}
         <button
-          onClick={() => dispatch(toggleDarkMode())}
+          onClick={handleDarkToggle}
           className="p-2 rounded-full hover:bg-blue-700 dark:hover:bg-gray-700 transition"
           title="Toggle Dark Mode"
         >
@@ -119,8 +127,8 @@ export default function EmpNavbar({ toggleSidebar }) {
           {showNotifications && (
             <div
               className={`${isDarkMode
-                  ? "bg-gray-800 text-gray-200 border-gray-700"
-                  : "bg-white text-gray-800 border-gray-200"
+                ? "bg-gray-800 text-gray-200 border-gray-700"
+                : "bg-white text-gray-800 border-gray-200"
                 } 
               fixed top-[64px] right-2 
               md:absolute md:top-auto md:right-0 md:mt-2
@@ -142,8 +150,8 @@ export default function EmpNavbar({ toggleSidebar }) {
                     onClick={() => handleNotificationClick(notification._id)}
                     key={notification._id}
                     className={`flex justify-between items-start p-3 border-b cursor-pointer transition ${isDarkMode
-                        ? "border-gray-700 hover:bg-gray-700"
-                        : "border-gray-200 hover:bg-gray-100"
+                      ? "border-gray-700 hover:bg-gray-700"
+                      : "border-gray-200 hover:bg-gray-100"
                       }`}
                   >
                     <div className="flex-1">

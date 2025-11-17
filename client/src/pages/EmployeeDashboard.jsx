@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
+import toast from "react-hot-toast";
 import API from "../utils/api";
 import {
   User,
@@ -28,7 +29,7 @@ export default function EmployeeDashboard() {
       const res = await API.get("/profile");
       setUser(res.data);
     } catch (err) {
-      console.error(err);
+      toast.error("Failed to fetch user profile.");
     }
   }
 
@@ -37,7 +38,7 @@ export default function EmployeeDashboard() {
       const res = await API.get("/attendance/me");
       setRecords(res.data);
     } catch (err) {
-      console.error(err);
+      toast.error("Failed to fetch attendance records.");
     }
   }
 

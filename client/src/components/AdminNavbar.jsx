@@ -84,9 +84,9 @@ export default function AdminNavbar({ toggleSidebar }) {
   // Dynamic Title
   const dashboardTitle =
     role === "admin" ? "Supar Admin Dashboard" :
-    role === "hr" ? "HR Admin Dashboard" :
-    role === "manager" ? "Manager Dashboard" :
-    "Admin Dashboard";
+      role === "hr" ? "HR Admin Dashboard" :
+        role === "manager" ? "Manager Dashboard" :
+          "Admin Dashboard";
 
   return (
     <header className={`fixed top-0 left-0 right-0 bg-blue-600 text-white p-4 shadow-md flex justify-between items-center z-50`}>
