@@ -243,7 +243,9 @@ export default function AdminChat() {
         },
       });
 
-      const { fileUrl, type, originalName } = res.data; // ⭐ important
+      const { fileUrl, type, originalName } = res.data;
+
+      // ⭐ important
 
       // 2️⃣ Save chat message in DB
       const msgSend = await API.post("/chat", {
@@ -336,32 +338,38 @@ export default function AdminChat() {
   const formatTime = (isoString) =>
     new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-  const getFileName = (url) => {
-    if (!url) return "File";
+  const getFileName = (m) => {
+    if (m?.fileName) return m.fileName;
+    if (m?.originalName) return m.originalName;
+    if (m?.name) return m.name;
 
+    // Extract from URL
     try {
-      const clean = url.split("?")[0]; // Remove query params
-      const parts = clean.split("/");
-      const filename = parts[parts.length - 1];
-      return decodeURIComponent(filename);
+      const clean = m.message.split("?")[0];
+      const extracted = decodeURIComponent(clean.split("/").pop());
+      return extracted;
     } catch {
       return "File";
     }
   };
-const getInlineUrl = (url) => { // ✅ FIXED
-  if (!url) return "";
-  try {
-    const urlObj = new URL(url);
-    const pathParts = urlObj.pathname.split('/');
-    const uploadIndex = pathParts.findIndex(part => part === 'upload');
 
-    // Insert fl_inline right after /upload/ part
-    pathParts.splice(uploadIndex + 1, 0, 'fl_inline');
-    return urlObj.origin + pathParts.join('/') + urlObj.search;
-  } catch {
-    return url;
-  }
-};
+
+  const getFileDownloadUrl = (url) => {
+    if (!url) return "";
+    try {
+      const urlObj = new URL(url);
+      const pathParts = urlObj.pathname.split('/');
+      const uploadIndex = pathParts.findIndex(part => part === 'upload');
+
+      // Insert fl_attachment for download
+      pathParts.splice(uploadIndex + 1, 0, 'fl_attachment');
+
+      return urlObj.origin + pathParts.join('/') + urlObj.search;
+    } catch {
+      return url;
+    }
+  };
+
   return (
     <div className="flex flex-col md:flex-row h-[85vh] border rounded-xl overflow-hidden shadow-md transition-colors duration-300 max-w-full">
       {/* SIDEBAR */}
@@ -509,25 +517,30 @@ const getInlineUrl = (url) => { // ✅ FIXED
                             </div>
                           ) : m.type === "file" ? (
                             <a
-                              href={getInlineUrl(m.message)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 underline break-all flex items-center gap-1 cursor-pointer"
-                              onClick={(e) => e.stopPropagation()}
+                              href={getFileDownloadUrl(m.message)}
+                              download={getFileName(m)}
+                              className="
+                                    break-all flex items-center gap-1 cursor-pointer
+                                    underline
+                                    text-inherit           /* ⭐ Link text color inherit karega */
+                                    decoration-inherit     /* ⭐ Underline ka color bhi inherit */
+                                    hover:text-inherit     /* ⭐ Hover me bhi color NOT change */
+                                    hover:decoration-inherit
+                                  "
                               onMouseDown={() => m.senderId === adminId && startLongPress(m._id)}
                               onMouseUp={(e) => {
-                                if (m.senderId === adminId) {
-                                  const shortClick = endLongPress();
-                                  if (shortClick) {
-                                    e.preventDefault();
-                                    window.open(getInlineUrl(m.message), "_blank");
-                                  }
+                                const shortClick = endLongPress();
+                                if (m.senderId === adminId && shortClick) {
+                                  window.open(getFileDownloadUrl(m.message), "_blank");
                                 }
                               }}
                               onMouseLeave={() => m.senderId === adminId && endLongPress()}
                             >
-                              📄 {m.fileName || "File"}
+                              📄 {getFileName(m)}
                             </a>
+
+
+
                           ) : (
                             <div className="whitespace-pre-wrap break-all" onClick={() => m.senderId === adminId && handleMessageSelect(m._id)}>
                               {m.message}

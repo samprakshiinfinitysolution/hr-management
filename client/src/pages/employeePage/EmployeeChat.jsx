@@ -27,16 +27,16 @@ export default function EmployeeChat() {
   const longPressTimer = useRef(null);
   const isLongPress = useRef(false);
 
-// ⬇️ Add these two
-const onImagePreview = (url) => {
-  setPreviewUrl(url);
-  setPreviewType("image");
-};
+  // ⬇️ Add these two
+  const onImagePreview = (url) => {
+    setPreviewUrl(url);
+    setPreviewType("image");
+  };
 
-const onFilePreview = (url) => {
-  setPreviewUrl(url);
-  setPreviewType("file");
-};
+  const onFilePreview = (url) => {
+    setPreviewUrl(url);
+    setPreviewType("file");
+  };
   // Load employee ID from user or localStorage
   useEffect(() => {
     const storedRaw = localStorage.getItem("employee");
@@ -227,10 +227,10 @@ const onFilePreview = (url) => {
     setDeleteTarget({ type: "messages", ids: selectedMessages });
     setShowDeleteModal(true);
   };
-const handleTextClick = (msgId) => {
-  if (!msgId) return;
-  handleMessageSelect(msgId); // instantly select
-};
+  const handleTextClick = (msgId) => {
+    if (!msgId) return;
+    handleMessageSelect(msgId); // instantly select
+  };
 
 
 
@@ -349,14 +349,15 @@ const handleTextClick = (msgId) => {
 
   const formatTime = (isoString) =>
     new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const getFileName = (url) => {
-    if (!url) return "File";
+   const getFileName = (m) => {
+    if (m?.fileName) return m.fileName;
+    if (m?.originalName) return m.originalName;
+    if (m?.name) return m.name;
 
+    // Fallback: Extract from URL
     try {
-      const clean = url.split("?")[0]; // Remove query params
-      const parts = clean.split("/");
-      const filename = parts[parts.length - 1];
-      return decodeURIComponent(filename);
+      const clean = m.message.split("?")[0];
+      return decodeURIComponent(clean.split("/").pop());
     } catch {
       return "File";
     }
@@ -369,6 +370,7 @@ const handleTextClick = (msgId) => {
       return url;
     }
   };
+
 
   return (
     <div className="flex flex-col md:flex-row h-[85vh] border rounded-xl overflow-hidden shadow-md transition-colors duration-300 max-w-full">
@@ -515,19 +517,27 @@ const handleTextClick = (msgId) => {
 
                             /* ---------- PDF / DOC ---------- */
                             <span
-                              className="text-blue-600 underline break-all flex items-center gap-1 cursor-pointer"
+                              className="
+    break-all flex items-center gap-1 cursor-pointer
+    underline
+    text-inherit
+    decoration-inherit
+    hover:text-inherit
+    hover:decoration-inherit
+  "
                               onMouseDown={() => startLongPress(m._id)}
                               onMouseUp={(e) => {
                                 const shortClick = endLongPress();
                                 if (shortClick) {
                                   e.preventDefault();
-                                  window.open(m.message, "_blank"); // open PDF in new tab
+                                  window.open(m.message, "_blank");
                                 }
                               }}
                               onMouseLeave={endLongPress}
                             >
-                              📄 {m.fileName || "File"}
+                              📄 {getFileName(m)}
                             </span>
+
 
                           ) : (
 

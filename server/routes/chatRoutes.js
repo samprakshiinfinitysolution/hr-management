@@ -10,33 +10,6 @@ router.post("/", verifyToken, sendMessage);
 router.delete("/message/:messageId", verifyToken, deleteMessage);
 router.delete("/:user1/:user2", verifyToken, deleteChat);
 
-// upload route
-
-// router.post(
-//   "/upload",
-//   verifyToken,
-//   uploadMiddleware,
-//   async (req, res) => {
-//     try {
-//       if (!req.file) {
-//         return res.status(400).json({ success: false, message: "No file uploaded" });
-//       }
-
-//       return res.status(200).json({
-//         success: true,
-//         fileUrl: req.file.path,
-//       });
-//     } catch (err) {
-//       console.error("Chat Upload Error:", err);
-//       return res.status(500).json({
-//         success: false,
-//         message: "Failed to upload file",
-//         error: err.message,
-//       });
-//     }
-//   }
-// );
-
 router.post(
   "/upload",
   verifyToken,
@@ -44,12 +17,19 @@ router.post(
   async (req, res) => {
     try {
       if (!req.file) {
-        return res.status(400).json({ success: false, message: "No file uploaded" });
+        return res.status(400).json({
+          success: false,
+          message: "No file uploaded",
+        });
       }
 
-      const fileUrl = req.file.path;
-      const originalName = req.file.originalname; // 🔥 REAL FILE NAME (IMPORTANT)
+      // Cloudinary URL (middleware sets this)
+      const fileUrl = req.file.path;  
 
+      // Original file name
+      const originalName = req.file.originalname;
+
+      // File type detect
       const fileType = req.file.mimetype.startsWith("image")
         ? "image"
         : "file";
@@ -57,8 +37,8 @@ router.post(
       return res.status(200).json({
         success: true,
         fileUrl,
-        originalName,   // 🔥 SEND REAL FILE NAME
-        type: fileType, // image / file
+        type: fileType,
+        originalName,   // Send REAL name
       });
     } catch (err) {
       console.error("Chat Upload Error:", err);
@@ -70,6 +50,7 @@ router.post(
     }
   }
 );
+
 
 
 export default router;

@@ -22,44 +22,7 @@ export const getMessages = async (req, res) => {
   }
 };
 
-// 💬 Send message (text / image / file)
-// export const sendMessage = async (req, res) => {
-//   try {
-//     const { senderId, receiverId, message, type } = req.body;
 
-//     // ✅ Determine message type automatically if not provided
-//     let messageType = type || "text";
-
-//     if (!message || !senderId || !receiverId) {
-//       return res
-//         .status(400)
-//         .json({ message: "senderId, receiverId and message are required" });
-//     }
-
-//     // Auto-detect type from content
-//     if (!type && typeof message === "string") {
-//       if (message.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
-//         messageType = "image";
-//       } else if (message.startsWith("https://res.cloudinary.com/")) {
-//         messageType = "file"; // fallback for any uploaded file
-//       } else {
-//         messageType = "text";
-//       }
-//     }
-
-//     const newMsg = await Chat.create({
-//       senderId,
-//       receiverId,
-//       message,
-//       type: messageType,
-//     });
-
-//     res.status(201).json(newMsg);
-//   } catch (error) {
-//     console.error("Error sending message:", error);
-//     res.status(500).json({ message: "Error sending message", error });
-//   }
-// };
 
 export const sendMessage = async (req, res) => {
   try {
