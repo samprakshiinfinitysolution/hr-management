@@ -3,8 +3,8 @@ import Policy from "../models/policyModel.js";
 // Get all policies
 export const getPolicies = async (req, res) => {
   try {
-    // In a multi-tenant setup, you might filter by req.user.id or an organization ID
-    const policies = await Policy.find().sort({ createdAt: -1 });
+    // Filter policies by the ID of the logged-in admin
+    const policies = await Policy.find({ createdBy: req.user.id }).sort({ createdAt: -1 });
     res.json(policies);
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch policies", error: error.message });
@@ -27,12 +27,17 @@ export const createPolicy = async (req, res) => {
 export const updatePolicy = async (req, res) => {
   try {
     const { title, content } = req.body;
-    const policy = await Policy.findByIdAndUpdate(
-      req.params.id,
+    const policy = await Policy.findOneAndUpdate(
+      // Find the policy by its ID AND the creator's ID
+      { _id: req.params.id, createdBy: req.user.id },
       { title, content },
       { new: true, runValidators: true }
     );
-    if (!policy) return res.status(404).json({ message: "Policy not found" });
+
+    if (!policy) {
+      // If policy is null, it's either not found or the user is not the owner
+      return res.status(404).json({ message: "Policy not found or you are not authorized to update it" });
+    }
     res.json(policy);
   } catch (error) {
     res.status(400).json({ message: "Failed to update policy", error: error.message });
@@ -42,8 +47,12 @@ export const updatePolicy = async (req, res) => {
 // Delete a policy
 export const deletePolicy = async (req, res) => {
   try {
-    const policy = await Policy.findByIdAndDelete(req.params.id);
-    if (!policy) return res.status(404).json({ message: "Policy not found" });
+    // Find the policy by its ID AND the creator's ID to delete it
+    const policy = await Policy.findOneAndDelete({ _id: req.params.id, createdBy: req.user.id });
+    if (!policy) {
+      // If policy is null, it's either not found or the user is not the owner
+      return res.status(404).json({ message: "Policy not found or you are not authorized to delete it" });
+    }
     res.json({ message: "Policy deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: "Failed to delete policy", error: error.message });

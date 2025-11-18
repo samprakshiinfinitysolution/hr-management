@@ -129,37 +129,70 @@ export default function AdminPolicy() {
       )}
 
       {/* Add/Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold">{isEditing ? 'Edit Policy' : 'Add New Policy'}</h2>
-              <button onClick={handleCloseModal}><X /></button>
-            </div>
-            <div className="space-y-4">
-              <input
-                type="text"
-                placeholder="Policy Title"
-                value={currentPolicy.title}
-                onChange={(e) => setCurrentPolicy({ ...currentPolicy, title: e.target.value })}
-                className="w-full p-2 border rounded"
-              />
-              <textarea
-                placeholder="Policy Content (HTML is supported)"
-                value={currentPolicy.content}
-                onChange={(e) => setCurrentPolicy({ ...currentPolicy, content: e.target.value })}
-                className="w-full p-2 border rounded"
-                rows={10}
-              />
-              <p className="text-xs text-gray-500">You can use HTML tags like &lt;b&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;p&gt; for formatting.</p>
-            </div>
-            <div className="flex justify-end gap-4 mt-6">
-              <button onClick={handleCloseModal} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-lg">Cancel</button>
-              <button onClick={handleSavePolicy} className="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2"><Save size={16} /> Save</button>
-            </div>
-          </div>
-        </div>
-      )}
+     {isModalOpen && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-lg p-6 max-w-2xl w-full shadow-xl">
+
+      {/* Header */}
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-2xl font-bold">
+          {isEditing ? "Edit Policy" : "Add New Policy"}
+        </h2>
+        <button 
+          onClick={handleCloseModal}
+          className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+        >
+          <X />
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="space-y-4">
+        <input
+          type="text"
+          placeholder="Policy Title"
+          value={currentPolicy.title}
+          onChange={(e) =>
+            setCurrentPolicy({ ...currentPolicy, title: e.target.value })
+          }
+          className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded"
+        />
+
+        <textarea
+          placeholder="Policy Content (HTML is supported)"
+          value={currentPolicy.content}
+          onChange={(e) =>
+            setCurrentPolicy({ ...currentPolicy, content: e.target.value })
+          }
+          className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded"
+          rows={10}
+        />
+
+        <p className="text-xs text-gray-600 dark:text-gray-400">
+          You can use HTML tags like &lt;b&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;p&gt; for formatting.
+        </p>
+      </div>
+
+      {/* Footer */}
+      <div className="flex justify-end gap-4 mt-6">
+        <button
+          onClick={handleCloseModal}
+          className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg"
+        >
+          Cancel
+        </button>
+
+        <button
+          onClick={handleSavePolicy}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
+        >
+          <Save size={16} /> Save
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
 
       {/* Delete Confirmation Modal */}
       {policyToDelete && (
