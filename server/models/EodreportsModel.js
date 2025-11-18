@@ -13,6 +13,10 @@ const eodReportSchema = new mongoose.Schema(
     reportingTime: { type: String },
     eodTime: { type: String },
     summary: { type: String },
+    nextDayPlan: {
+      type: String,
+      default: "",
+    },
 
     rows: [
       {

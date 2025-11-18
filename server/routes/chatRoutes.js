@@ -10,8 +10,6 @@ router.post("/", verifyToken, sendMessage);
 router.delete("/message/:messageId", verifyToken, deleteMessage);
 router.delete("/:user1/:user2", verifyToken, deleteChat);
 
-// upload route
-
 router.post(
   "/upload",
   verifyToken,
@@ -19,12 +17,28 @@ router.post(
   async (req, res) => {
     try {
       if (!req.file) {
-        return res.status(400).json({ success: false, message: "No file uploaded" });
+        return res.status(400).json({
+          success: false,
+          message: "No file uploaded",
+        });
       }
+
+      // Cloudinary URL (middleware sets this)
+      const fileUrl = req.file.path;  
+
+      // Original file name
+      const originalName = req.file.originalname;
+
+      // File type detect
+      const fileType = req.file.mimetype.startsWith("image")
+        ? "image"
+        : "file";
 
       return res.status(200).json({
         success: true,
-        fileUrl: req.file.path,
+        fileUrl,
+        type: fileType,
+        originalName,   // Send REAL name
       });
     } catch (err) {
       console.error("Chat Upload Error:", err);
@@ -36,6 +50,8 @@ router.post(
     }
   }
 );
+
+
 
 export default router;
 

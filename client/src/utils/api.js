@@ -1,25 +1,50 @@
 
 import axios from "axios";
+import store from "../app/store"; 
+import { showLoader, hideLoader } from "../features/auth/loaderSlice";
 
-// Base URL from environment variable (Render backend)
-const API_BASE_URL = import.meta.env.VITE_API_URL
+// Base URL from environment variable
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
+// Axios Instance
 const API = axios.create({
-
   baseURL: API_BASE_URL,
-  // withCredentials: true, // uncomment if you use cookie-based auth
 });
 
-// Attach token from localStorage
-API.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+// ----------- REQUEST INTERCEPTOR -----------
+API.interceptors.request.use(
+  (config) => {
+    // Loader ON
+    store.dispatch(showLoader());
+
+    // Attach token
+    const token = localStorage.getItem("token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    return config;
+  },
+  (error) => {
+    store.dispatch(hideLoader());
+    return Promise.reject(error);
   }
-  return config;
-});
+);
 
-// Optional MockAPI for development/testing
+// ----------- RESPONSE INTERCEPTOR -----------
+API.interceptors.response.use(
+  (response) => {
+    // Loader OFF
+    store.dispatch(hideLoader());
+    return response;
+  },
+  (error) => {
+    store.dispatch(hideLoader());
+    return Promise.reject(error);
+  }
+);
+
+// ---------- MOCK API (Optional for Testing) ----------
 export const MockAPI = {
   get: async (url) => {
     if (url === "/admin/me") {
@@ -60,6 +85,7 @@ export const MockAPI = {
     }
     return { data: [] };
   },
+
   post: async () => ({ data: {} }),
   delete: async () => ({ data: {} }),
 };

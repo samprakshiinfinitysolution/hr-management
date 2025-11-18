@@ -55,7 +55,7 @@ export default function AdminEmpManagement() {
     }
   }, [showConfirmationModal, countdown]);
 
-  // बाहर क्लिक करने पर ड्रॉपडाउन बंद करने के लिए
+  
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {

@@ -3,7 +3,7 @@ import io from "socket.io-client";
 import API from "../../utils/api";
 import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
-import { Trash2, FileText, X } from "lucide-react";
+import { Trash2, FileText, X, Check, CheckCheck } from "lucide-react";
 import { socket } from "../../socket/socket.js";
 
 export default function AdminChat() {
@@ -19,10 +19,14 @@ export default function AdminChat() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [selectedMessages, setSelectedMessages] = useState([]);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewType, setPreviewType] = useState(null);
 
   const user = useSelector((state) => state.auth?.user);
   const chatBoxRef = useRef(null);
   const inputRef = useRef(null);
+  const longPressTimer = useRef(null);
+  const isLongPress = useRef(false);
 
   // ✅ Load Admin ID
   useEffect(() => {
@@ -164,22 +168,38 @@ export default function AdminChat() {
   }, [messages, selectedUser, adminId]);
 
   // ✅ Send text message
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!message.trim() || !selectedUser || !adminId) return;
 
-    const room = [selectedUser._id, adminId].sort().join("_");
-    const msgData = {
-      room,
+    // 1. Save message to DB via API
+    const { data: finalMsg } = await API.post("/chat", {
       senderId: adminId,
       receiverId: selectedUser._id,
       message,
       type: "text",
-      createdAt: new Date().toISOString(),
-    };
+    });
 
-    socket.emit("sendMessage", msgData);
-    setMessages((prev) => [...prev, msgData]);
+    // 2. Emit message via socket
+    socket.emit("sendMessage", finalMsg);
+
+    // 3. Update UI with the message from the server (which has an _id)
+    setMessages((prev) => [...prev, finalMsg]);
     setMessage("");
+  };
+
+  // Long press handlers
+  const startLongPress = (messageId) => {
+    isLongPress.current = false;
+    longPressTimer.current = setTimeout(() => {
+      isLongPress.current = true;
+      handleMessageSelect(messageId);
+    }, 500);
+  };
+
+  const endLongPress = () => {
+    clearTimeout(longPressTimer.current);
+    // Return true if it was a short click
+    return !isLongPress.current;
   };
 
   // ✅ Select message for deletion
@@ -204,8 +224,56 @@ export default function AdminChat() {
 
   // ✅ File upload handler
   const handleFileChange = async (e) => {
-    toast.error("File upload is currently disabled.");
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      toast.loading("Uploading file...", { id: "upload" });
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const token = localStorage.getItem("token");
+
+      // 1️⃣ Upload file
+      const res = await API.post("/chat/upload", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const { fileUrl, type, originalName } = res.data;
+
+      // ⭐ important
+
+      // 2️⃣ Save chat message in DB
+      const msgSend = await API.post("/chat", {
+        senderId: adminId,
+        receiverId: selectedUser._id,
+        message: fileUrl,
+        type,
+        fileName: originalName   // ⭐ REAL FILE NAME SAVE
+      });
+
+      const finalMsg = msgSend.data;
+
+      // 3️⃣ Send through socket
+      socket.emit("sendMessage", finalMsg);
+
+      // 4️⃣ Update UI
+      setMessages(prev => [...prev, finalMsg]);
+
+      toast.success("File sent");
+    } catch (err) {
+      console.error("Admin file upload error:", err);
+      toast.error("Upload failed");
+    } finally {
+      toast.dismiss("upload");
+      e.target.value = "";
+    }
   };
+
 
   // ✅ Delete chat/message
   const confirmDeleteMessage = (msgId) => {
@@ -267,6 +335,40 @@ export default function AdminChat() {
       year: "numeric",
     });
   };
+  const formatTime = (isoString) =>
+    new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  const getFileName = (m) => {
+    if (m?.fileName) return m.fileName;
+    if (m?.originalName) return m.originalName;
+    if (m?.name) return m.name;
+
+    // Extract from URL
+    try {
+      const clean = m.message.split("?")[0];
+      const extracted = decodeURIComponent(clean.split("/").pop());
+      return extracted;
+    } catch {
+      return "File";
+    }
+  };
+
+
+  const getFileDownloadUrl = (url) => {
+    if (!url) return "";
+    try {
+      const urlObj = new URL(url);
+      const pathParts = urlObj.pathname.split('/');
+      const uploadIndex = pathParts.findIndex(part => part === 'upload');
+
+      // Insert fl_attachment for download
+      pathParts.splice(uploadIndex + 1, 0, 'fl_attachment');
+
+      return urlObj.origin + pathParts.join('/') + urlObj.search;
+    } catch {
+      return url;
+    }
+  };
 
   return (
     <div className="flex flex-col md:flex-row h-[85vh] border rounded-xl overflow-hidden shadow-md transition-colors duration-300 max-w-full">
@@ -282,8 +384,8 @@ export default function AdminChat() {
           <button
             onClick={() => setChatType("employee")}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${chatType === "employee"
-                ? "bg-blue-600 text-white"
-                : "border hover:bg-gray-200 hover:text-black cursor-pointer"
+              ? "bg-blue-600 text-white"
+              : "border hover:bg-gray-200 hover:text-black cursor-pointer"
               }`}
           >
             Employees
@@ -291,8 +393,8 @@ export default function AdminChat() {
           <button
             onClick={() => setChatType("admin")}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${chatType === "admin"
-                ? "bg-blue-600 text-white"
-                : "border hover:bg-gray-200 hover:text-black cursor-pointer"
+              ? "bg-blue-600 text-white"
+              : "border hover:bg-gray-200 hover:text-black cursor-pointer"
               }`}
           >
             Admins
@@ -305,14 +407,14 @@ export default function AdminChat() {
                 key={u._id}
                 onClick={() => setSelectedUser(u)}
                 className={`p-3 cursor-pointer rounded-lg text-center md:text-left text-sm font-medium transition flex items-center gap-2 ${selectedUser?._id === u._id
-                    ? "bg-blue-600 text-white"
-                    : "border hover:bg-gray-200 hover:text-black"
+                  ? "bg-blue-600 text-white"
+                  : "border hover:bg-gray-200 hover:text-black"
                   }`}
               >
                 <span
                   className={`w-2 h-2 rounded-full flex-shrink-0 ${onlineUsers.includes(u._id)
-                      ? "bg-green-500"
-                      : "bg-red-500"
+                    ? "bg-green-500"
+                    : "bg-red-500"
                     }`}
                   title={onlineUsers.includes(u._id) ? "Online" : "Offline"}
                 ></span>
@@ -364,7 +466,6 @@ export default function AdminChat() {
                     {groupedMessages[dateKey].map((m, i) => (
                       <div
                         key={m._id || i}
-                        onClick={() => m._id && handleMessageSelect(m._id)}
                         className={`
                           relative group px-3 py-2 rounded-2xl max-w-[80%] md:max-w-[70%] break-words shadow-sm transition w-fit
                           ${m.senderId === adminId ? "cursor-pointer" : ""}
@@ -380,44 +481,83 @@ export default function AdminChat() {
                           }
                         `}
                       >
-                        <div className="flex items-end gap-2">
-                          <div className="whitespace-pre-wrap break-words leading-snug">
-                            {m.type === "file" || m.type === "image" ? (
-                              m.message.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
-                                <img
-                                  src={m.message}
-                                  alt="attachment"
-                                  className="max-w-[200px] rounded-lg cursor-pointer hover:opacity-90 transition"
-                                  onClick={() => window.open(m.message, "_blank")}
-                                />
-                              ) : (
-                                <a href={m.message} target="_blank" rel="noopener noreferrer" className="underline text-sm text-blue-200 hover:text-blue-100 break-all">
-                                  <span className="truncate max-w-[calc(100%-2rem)] inline-block text-red-600">
-                                    {decodeURIComponent(m.message.split("/").pop())}
+                        <div className="flex items-end gap-x-2">
+
+                          {m.type === "image" ? (
+                            <div className="relative">
+                              <img
+                                src={m.message}
+                                className="max-w-[200px] rounded-lg cursor-pointer"
+                                onMouseDown={() => m.senderId === adminId && startLongPress(m._id)}
+                                onMouseUp={(e) => {
+                                  if (m.senderId === adminId) {
+                                    const shortClick = endLongPress();
+                                    if (shortClick) {
+                                      e.stopPropagation();
+                                      setPreviewUrl(m.message);
+                                      setPreviewType("image");
+                                    }
+                                  } else {
+                                    e.stopPropagation();
+                                    setPreviewUrl(m.message);
+                                    setPreviewType("image");
+                                  }
+                                }}
+                                onMouseLeave={() => m.senderId === adminId && endLongPress()}
+                              />
+                              {/* Timestamp overlay for image */}
+                              <div className="absolute bottom-1 right-1 bg-black/50 text-white rounded px-1.5 py-0.5 text-xs flex items-center gap-1">
+                                <span>{formatTime(m.createdAt)}</span>
+                                {m.senderId === adminId && (
+                                  <span>
+                                    {m.isRead ? <CheckCheck size={16} className="text-sky-400" /> : m.isDelivered ? <CheckCheck size={16} /> : m._id ? <Check size={16} /> : null}
                                   </span>
-                                </a>
-                              )
-                            ) : (
-                              m.message
-                            )}
-                          </div>
-                          <div className="flex-shrink-0 self-end flex items-center gap-1 text-[10px] opacity-75">
-                          <span>
-                            {new Date(m.createdAt).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
-                          {m.senderId === adminId && (
-                            <span className="ml-1 flex items-center">
-                              {m.isRead ? (
-                                <span className="text-black text-[11px]">✓✓</span>
-                              ) : (
-                                <span className="text-white text-[11px]">✓</span>
-                              )}
-                            </span>
+                                )}
+                              </div>
+                            </div>
+                          ) : m.type === "file" ? (
+                            <a
+                              href={getFileDownloadUrl(m.message)}
+                              download={getFileName(m)}
+                              className="
+                                    break-all flex items-center gap-1 cursor-pointer
+                                    underline
+                                    text-inherit           /* ⭐ Link text color inherit karega */
+                                    decoration-inherit     /* ⭐ Underline ka color bhi inherit */
+                                    hover:text-inherit     /* ⭐ Hover me bhi color NOT change */
+                                    hover:decoration-inherit
+                                  "
+                              onMouseDown={() => m.senderId === adminId && startLongPress(m._id)}
+                              onMouseUp={(e) => {
+                                const shortClick = endLongPress();
+                                if (m.senderId === adminId && shortClick) {
+                                  window.open(getFileDownloadUrl(m.message), "_blank");
+                                }
+                              }}
+                              onMouseLeave={() => m.senderId === adminId && endLongPress()}
+                            >
+                              📄 {getFileName(m)}
+                            </a>
+
+
+
+                          ) : (
+                            <div className="whitespace-pre-wrap break-all" onClick={() => m.senderId === adminId && handleMessageSelect(m._id)}>
+                              {m.message}
+                            </div>
                           )}
-                          </div>
+
+                          {/* Time + Ticks for TEXT and FILE messages */}
+                          {m.type !== 'image' && (
+                            <div className="text-xs flex-shrink-0 self-end flex items-center gap-1 opacity-70">
+                              <span>{formatTime(m.createdAt)}</span>
+                              {m.senderId === adminId && (
+                                <span>
+                                  {m.isRead ? <CheckCheck size={16} className="text-sky-400" /> : m.isDelivered ? <CheckCheck size={16} /> : m._id ? <Check size={16} /> : null}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -484,6 +624,33 @@ export default function AdminChat() {
           </div>
         )}
 
+        {/* Full Screen Image Preview Modal */}
+        {previewUrl && previewType === "image" && (
+          <div
+            className="fixed inset-0 bg-black/85 flex items-center justify-center z-[999]"
+            onClick={() => setPreviewUrl(null)} // Close when clicking outside
+          >
+            {/* Close Button */}
+            <button
+              className="absolute top-3 right-3 text-white text-3xl font-bold bg-black/40 rounded-full w-10 h-10 flex items-center justify-center hover:bg-black/60"
+              onClick={(e) => {
+                e.stopPropagation();
+                setPreviewUrl(null);
+              }}
+            >
+              ✕
+            </button>
+
+            {/* Image Preview */}
+            <img
+              src={previewUrl}
+              className="max-w-[95vw] max-h-[95vh] object-contain rounded-lg shadow-lg"
+              onClick={(e) => e.stopPropagation()} // Prevent closing when clicking the image
+            />
+          </div>
+        )}
+
+
         {/* Delete Modal */}
         {showDeleteModal && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
@@ -492,8 +659,8 @@ export default function AdminChat() {
                 {deleteTarget?.type === "message"
                   ? "Delete this message?"
                   : deleteTarget?.type === "messages"
-                  ? `Delete ${deleteTarget.ids.length} message(s)?`
-                  : "Delete entire chat?"}
+                    ? `Delete ${deleteTarget.ids.length} message(s)?`
+                    : "Delete entire chat?"}
               </h3>
               <div className="flex justify-center gap-3 mt-4">
                 <button

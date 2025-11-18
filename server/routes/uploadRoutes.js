@@ -28,5 +28,16 @@ router.post(
     }
   }
 );
+router.post("/upload", verifyToken, uploadMiddleware, async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: "No file uploaded" });
+  }
+
+  return res.status(200).json({
+    success: true,
+    fileUrl: req.file.path,
+  });
+});
+
 
 export default router;

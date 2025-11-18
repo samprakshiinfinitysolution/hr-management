@@ -11,6 +11,7 @@ export default function AdminEodReports() {
     eodTime: "",
     project: "",
     summary: "",
+    nextDayPlan: "",
   });
 
   const [rows, setRows] = useState([]);
@@ -82,6 +83,7 @@ export default function AdminEodReports() {
       eodTime: report.eodTime || "",
       project: report.project || "",
       summary: report.summary || "",
+      nextDayPlan: report.nextDayPlan || "",
     });
     setRows(report.rows || []);
   };
@@ -94,8 +96,21 @@ export default function AdminEodReports() {
       eodTime: "",
       project: "",
       summary: "",
+      nextDayPlan: "",
     });
     setRows([]);
+  };
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case "Done":
+        return "bg-green-200 text-green-800 px-2 py-1 rounded font-semibold";
+      case "Pending":
+        return "bg-yellow-200 text-yellow-800 px-2 py-1 rounded font-semibold";
+      case "Working":
+        return "bg-blue-200 text-blue-800 px-2 py-1 rounded font-semibold";
+      default:
+        return "bg-gray-200 text-gray-700 px-2 py-1 rounded";
+    }
   };
 
   return (
@@ -238,17 +253,30 @@ export default function AdminEodReports() {
               ) : (
                 rows.map((row, i) => (
                   <tr key={i}>
-                    <td className="border p-2 text-sm font-semibold">
-                      {row.time}
+                    <td className="border p-2 text-sm font-semibold">{row.time}</td>
+
+                    <td className="border p-2 text-sm">
+                      {row.task || "-"}
                     </td>
-                    <td className="border p-2 text-sm">{row.task}</td>
-                    <td className="border p-2 text-sm">{row.description}</td>
-                    <td className="border p-2 text-sm">{row.status}</td>
-                    <td className="border p-2 text-sm">{row.remarks}</td>
+
+                    <td className="border p-2 text-sm">
+                      {row.description || "-"}
+                    </td>
+
+                    <td className="border p-2 text-sm">
+                      <span className={getStatusBadge(row.status)}>
+                        {row.status || "—"}
+                      </span>
+                    </td>
+
+                    <td className="border p-2 text-sm">
+                      {row.remarks || "-"}
+                    </td>
                   </tr>
                 ))
               )}
             </tbody>
+
           </table>
         </div>
 
@@ -263,6 +291,15 @@ export default function AdminEodReports() {
             readOnly
             rows={3}
             className="w-full p-3 border rounded-md dark:border-gray-600"
+          />
+        </div>
+        <div className="mb-6">
+          <label className="font-semibold text-sm block mb-2">Next Day Plan</label>
+          <textarea
+            value={form.nextDayPlan || "—"}
+            readOnly
+            rows={3}
+            className="w-full p-3 border rounded-md dark:border-gray-600 "
           />
         </div>
       </div>

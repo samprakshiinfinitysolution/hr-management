@@ -8,6 +8,7 @@ import {
   IndianRupee,
   MessageSquare,
   Settings,
+  BookText,
   Clock,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ export default function EmpSidebar({ isOpen }) {
     { name: "Chat", icon: <MessageSquare size={20} />, path: "/employee/chat" },
     { name: "Profile", icon: <User size={20} />, path: "/employee/profile" },
     { name: "Salary Slip", icon: <IndianRupee size={20} />, path: "/employee/salary-slip" }, // Corrected path
+    { name: "Policies", icon: <BookText size={20} />, path: "/employee/policy" },
     { name: "Settings", icon: <Settings size={20} />, path: "/employee/setting" },
   ];
 
@@ -32,7 +34,7 @@ export default function EmpSidebar({ isOpen }) {
       </div>
 
       {/* Menu Items */}
-      <div className="flex flex-col mt-2 gap-2">
+      <div className="flex flex-col mt-2 gap-2 flex-1 overflow-y-auto custom-scrollbar pr-2">
         {menuItems.map((item) => (
           <NavLink
             key={item.name}

@@ -1,15 +1,12 @@
+
 import multer from "multer";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
 import cloudinary from "../config/cloudinary.js";
 
-// ⬇️ Cloudinary storage
 const storage = new CloudinaryStorage({
   cloudinary,
   params: (req, file) => {
-    const base = req?.baseUrl || "";
-    const url = req?.url || "";
-    const fullPath = base + url;
-
+    const fullPath = req.baseUrl + req.url;
     const isProfile = fullPath.includes("upload/profile");
 
     return {
@@ -17,27 +14,45 @@ const storage = new CloudinaryStorage({
         ? "hr_management/profile_uploads"
         : "hr_management/chat_uploads",
 
-      resource_type: "auto",
-      allowed_formats: ["jpg", "jpeg", "png", "webp"],
-      transformation: [{ width: 1000, height: 1000, crop: "limit" }],
+      // ⭐ SAVE ORIGINAL FILE NAME IN CLOUDINARY
+      public_id: file.originalname.split(".")[0],  
+
+      resource_type: isProfile ? "image" : "raw",
+
+      allowed_formats: isProfile
+        ? ["jpg", "jpeg", "png", "webp"]
+        : ["jpg", "jpeg", "png", "webp", "pdf", "docx", "xlsx"],
+
+      transformation: isProfile
+        ? [{ width: 1000, height: 1000, crop: "limit" }]
+        : undefined,
     };
   },
 });
 
-// ⬇️ Multer uploader
-const uploader = multer({ storage }).single("profileImage");
-
-// ⬇️ Export wrapper middleware
 export default function uploadMiddleware(req, res, next) {
-  uploader(req, res, (err) => {
+  const fieldName = req.url.includes("/profile")
+    ? "profileImage"
+    : "file";
+
+  multer({ storage }).single(fieldName)(req, res, (err) => {
     if (err) {
-      console.error("❌ Multer Upload Error:", err);
+      console.error("❌ Upload Error:", err);
       return res.status(500).json({
         success: false,
         message: "Upload failed",
         error: err.message,
       });
     }
+
+    // ⭐ RESTORE FILENAME SAFELY
+    if (req.file) {
+      req.file.originalname =
+        req.file.originalname ||
+        req.file.original_name ||
+        req.file.filename;
+    }
+
     next();
   });
 }

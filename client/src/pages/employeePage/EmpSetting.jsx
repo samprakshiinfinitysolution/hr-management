@@ -1,21 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Sun, Moon, Bell, BellOff, User, Eye, EyeOff } from "lucide-react";
+import { Sun, Moon, Bell, BellOff, Eye, EyeOff } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { useNavigate } from "react-router-dom";
-import { logout, verifyUser } from "../../features/auth/authSlice";
 import {
   toggleDarkMode,
   toggleEmailNotifications,
-  toggleProfileVisibility,
 } from "../../features/auth/settingsSlice";
 
 import API from "../../utils/api";
 
 export default function EmployeeSettings() {
   const dispatch = useDispatch();
-  const navigate = useNavigate();
-  const { isDarkMode, emailNotifications, profilePublic } = useSelector(
+  const { isDarkMode, emailNotifications } = useSelector(
     (state) => state.settings
   );
 
@@ -56,11 +52,8 @@ export default function EmployeeSettings() {
     try {
       const res = await API.put("/profile/change-password", { password });
       toast.success(res.data.message || "Password updated successfully.");
-      // optional: if backend returns token, update it
-      if (res.data.token) {
-        localStorage.setItem("token", res.data.token);
-        dispatch(verifyUser());
-      }
+      setPassword("");
+      setConfirmPassword("");
       // keep user on page (or logout if you prefer)
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to update password.");

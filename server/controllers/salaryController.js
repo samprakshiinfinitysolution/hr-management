@@ -7,11 +7,13 @@ import Admin from "../models/adminModel.js";
 import dayjs from "dayjs";
 
 // CALCULATE SALARY
+
 export const calculateSalary = async (req, res) => {
   try {
     const { employeeId, month, year } = req.body;
     const { id: userId, role, isMainAdmin } = req.user;
 
+    // 🔍 Authorization Check
     let empQuery;
     if (isMainAdmin) {
       const subAdmins = await Admin.find({ createdBy: userId }).select("_id");
@@ -27,9 +29,13 @@ export const calculateSalary = async (req, res) => {
     }
 
     const employee = await Employee.findOne(empQuery);
-    if (!employee) return res.status(404).json({ message: "Employee not found or unauthorized" });
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not authorised" });
+    }
 
+    // 💰 Basic Salary Calculation
     const baseSalary = employee.salary || 0;
+
     const startDate = dayjs(`${year}-${month}-01`).startOf("month").toDate();
     const endDate = dayjs(startDate).endOf("month").toDate();
 
@@ -38,31 +44,54 @@ export const calculateSalary = async (req, res) => {
       date: { $gte: startDate, $lte: endDate },
     });
 
+    // ----------------------------
+    //     DEDUCTION LOGIC
+    // ----------------------------
+
     let absentDays = 0;
+    let halfDays = 0;
     let lateDays = 0;
+    let earlyCheckout = 0;
+
     attendance.forEach(record => {
       if (record.status === "Absent") absentDays++;
+      if (record.status === "Half Day") halfDays++;
       if (record.status === "Late" || record.status === "Late Login") lateDays++;
+      if (record.status === "Early Checkout") earlyCheckout++;
     });
 
     const totalDays = dayjs(endDate).diff(startDate, "day") + 1;
     const dailySalary = baseSalary / totalDays;
-    const deduction = (absentDays * dailySalary) + (lateDays * (dailySalary / 2));
-    const netSalary = baseSalary - deduction;
-    const remarks = `Absent: ${absentDays} days, Late: ${lateDays} days`;
+
+    // ⭐ DEDUCTION RULES
+    const absentDed = absentDays * dailySalary;
+    const halfDayDed = halfDays * (dailySalary / 2);
+    const lateDed = lateDays * (dailySalary / 2);
+    const earlyDed = earlyCheckout * (dailySalary / 2);
+
+    // TOTAL DEDUCTION
+    const deduction = Math.round(absentDed + halfDayDed + lateDed + earlyDed);
+    const netSalary = Math.round(baseSalary - deduction);
+
+    const remarks =
+      `Absent: ${absentDays}, Half Day: ${halfDays}, Late: ${lateDays}, Early Checkout: ${earlyCheckout}`;
 
     res.json({
       baseSalary,
       absentDays,
+      halfDays,
       lateDays,
-      deduction: Math.round(deduction),
-      netSalary: Math.round(netSalary),
-      remarks: absentDays + lateDays > 0 ? remarks : "No deductions",
+      earlyCheckout,
+      deduction,
+      netSalary,
+      remarks,
     });
+
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({ message: "Server Error" });
   }
 };
+
 
 // SEND SALARY SLIP
 export const sendSalarySlip = async (req, res) => {
@@ -117,6 +146,7 @@ export const sendSalarySlip = async (req, res) => {
   }
 };
 
+
 // GET ALL SALARY SLIPS (Admin/HR/Manager)
 export const getSalarySlips = async (req, res) => {
   try {
@@ -135,9 +165,20 @@ export const getSalarySlips = async (req, res) => {
     } else {
       empQuery = { createdBy: userId };
     }
+
     const employeeIds = await Employee.find(empQuery).distinct("_id");
 
-    const slips = await SalarySlip.find({ employeeId: { $in: employeeIds } })
+    // 🔥 NEW FILTERS
+    const filter = { employeeId: { $in: employeeIds } };
+
+    if (req.query.month) {
+      filter.month = Number(req.query.month);
+    }
+    if (req.query.year) {
+      filter.year = Number(req.query.year);
+    }
+
+    const slips = await SalarySlip.find(filter)
       .populate("employeeId", "name email")
       .sort({ year: -1, month: -1 });
 
@@ -146,6 +187,8 @@ export const getSalarySlips = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+
 
 // GET MY SALARY SLIPS (Employee)
 export const getEmployeeSalarySlips = async (req, res) => {

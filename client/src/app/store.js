@@ -3,7 +3,7 @@ import authReducer from "../features/auth/authSlice";
 import dashboardReducer from "../features/auth/dashboardSlice";
 import employeeReducer from "../features/auth/employeeSlice";
 import settingsReducer from "../features/auth/settingsSlice";
-
+import loaderReducer from "../features/auth/loaderSlice";
 // Middleware to persist settings to localStorage
 const localStorageMiddleware = (store) => (next) => (action) => {
   const result = next(action);
@@ -26,7 +26,10 @@ export const store = configureStore({
     dashboard: dashboardReducer,
     employee: employeeReducer,
     settings: settingsReducer,
+    loader: loaderReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware().concat(localStorageMiddleware),
 });
+
+export default store;
