@@ -322,33 +322,40 @@ export default function EmpSalaryslip() {
 
       {/* -------- VIEW MODAL -------- */}
       {selectedSlip && (
-        <div className={`fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50 ${isDarkMode ? 'dark' : ''}`}>
-          <div className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-xl shadow-2xl p-6 w-[90%] max-w-md relative">
-            <button
-              onClick={() => setSelectedSlip(null)}
-              className="absolute top-3 right-3 text-gray-500 hover:text-gray-800"
-            >
-              <X size={20} />
-            </button>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+  <div className="relative rounded-lg p-6 max-w-lg w-full bg-white text-black dark:bg-gray-800 dark:text-white shadow-lg">
 
-            <h2 className="text-xl font-bold mb-4 text-center text-blue-600 dark:text-blue-400">
-              Salary Slip - {selectedSlip.month} {selectedSlip.year}
-            </h2>
+    {/* Close Button */}
+    <button
+      onClick={() => setSelectedSlip(null)}
+      className="absolute top-3 right-3 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+      title="Close"
+    >
+      <X size={20} />
+    </button>
 
-            <p>
-              <strong>Base Salary:</strong> ₹{selectedSlip.baseSalary}
-            </p>
-            <p>
-              <strong>Deduction:</strong> ₹{selectedSlip.deduction}
-            </p>
-            <p>
-              <strong>Net Pay:</strong> ₹{selectedSlip.netSalary}
-            </p>
-            <p className="mt-2">
-              <strong>Remarks:</strong> {selectedSlip.remarks}
-            </p>
-          </div>
-        </div>
+    <h2 className="text-xl font-bold mb-4 text-center text-blue-600 dark:text-blue-400">
+      Salary Slip - {selectedSlip.month} {selectedSlip.year}
+    </h2>
+
+    <p><strong>Base Salary:</strong> ₹{selectedSlip.baseSalary}</p>
+    <p><strong>Deduction:</strong> ₹{selectedSlip.deduction}</p>
+    <p><strong>Net Pay:</strong> ₹{selectedSlip.netSalary}</p>
+    <p className="mt-2"><strong>Remarks:</strong> {selectedSlip.remarks}</p>
+
+    {/* Optional Cancel Button at bottom */}
+    <div className="mt-6 flex justify-end">
+      <button
+        onClick={() => setSelectedSlip(null)}
+        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg transition"
+      >
+        Cancel
+      </button>
+    </div>
+
+  </div>
+</div>
+
       )}
     </div>
   );
