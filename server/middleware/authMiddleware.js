@@ -47,7 +47,7 @@ export const verifyToken = (req, res, next) => {
       id: decoded.id || decoded._id || decoded.userId || null,
       role: (decoded.role || "").toLowerCase().trim(),
       isMainAdmin: decoded.isMainAdmin || false,
-      createdBy: decoded.createdBy || null,
+      createdBy: decoded.createdBy || decoded.adminId || null,
     };
 
     if (!req.user.id) {
