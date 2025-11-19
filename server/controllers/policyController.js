@@ -1,15 +1,35 @@
 import Policy from "../models/policyModel.js";
 
 // Get all policies
+// Get all policies (filtered by organization)
 export const getPolicies = async (req, res) => {
   try {
-    // Filter policies by the ID of the logged-in admin
-    const policies = await Policy.find({ createdBy: req.user.id }).sort({ createdAt: -1 });
-    res.json(policies);
+    let query = {};
+
+    // MAIN ADMIN → shows only their policies
+    if (req.user.role === "admin") {
+      query = { createdBy: req.user.id };
+    }
+
+    // HR / MANAGER → they belong to a main admin
+    else if (req.user.role === "hr" || req.user.role === "manager") {
+      query = { createdBy: req.user.createdBy };
+    }
+
+    // EMPLOYEE → createdBy field contains their adminId
+    else if (req.user.role === "employee") {
+      query = { createdBy: req.user.adminId || req.user.createdBy };
+    }
+
+    const policies = await Policy.find(query).sort({ createdAt: -1 });
+    return res.json(policies);
+
   } catch (error) {
+    console.error("Policy Fetch Error:", error);
     res.status(500).json({ message: "Failed to fetch policies", error: error.message });
   }
 };
+
 
 // Create a new policy
 export const createPolicy = async (req, res) => {
