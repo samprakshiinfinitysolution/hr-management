@@ -116,40 +116,95 @@ export const checkIn = async (req, res) => {
 };
 
 // CHECK-OUT
+// export const checkOut = async (req, res) => {
+//   try {
+//     const employeeId = req.user.id;
+//     const dateOnly = new Date(moment().tz("Asia/Kolkata").format("YYYY-MM-DD"));
+
+//     const att = await Attendance.findOne({ user: employeeId, date: dateOnly });
+//     if (!att || !att.checkIn) {
+//       return res.status(400).json({ message: "No check-in found for today" });
+//     }
+//     if (att.checkOut) {
+//       return res.status(400).json({ message: "Already checked out today" });
+//     }
+
+//     const employee = await Employee.findById(employeeId);
+//     const adminSettingsRaw = await Admin.findById(employee.createdBy).select("attendanceSettings");
+//     const settings = normalizeSettings(adminSettingsRaw?.attendanceSettings || {});
+
+//     const now = moment().tz("Asia/Kolkata");
+//     att.checkOut = now.toDate();
+//     att.logout = now.format("HH:mm");
+
+//     const diffMs = att.checkOut.getTime() - att.checkIn.getTime();
+//     att.totalHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
+
+//     att.remark = getRemark(att.login, att.logout, settings);
+//     att.status = att.remark;
+
+//     await att.save();
+//     return res.json({ message: "Checked out successfully", att });
+//   } catch (err) {
+//     console.error("checkOut error:", err);
+//     return res.status(500).json({ message: "Server error" });
+//   }
+// };
 export const checkOut = async (req, res) => {
   try {
     const employeeId = req.user.id;
-    const dateOnly = new Date(moment().tz("Asia/Kolkata").format("YYYY-MM-DD"));
+    const now = moment().tz("Asia/Kolkata");
+    const dateOnly = new Date(now.format("YYYY-MM-DD"));
 
     const att = await Attendance.findOne({ user: employeeId, date: dateOnly });
+
     if (!att || !att.checkIn) {
-      return res.status(400).json({ message: "No check-in found for today" });
+      return res.status(400).json({ message: "Please check-in first." });
     }
     if (att.checkOut) {
-      return res.status(400).json({ message: "Already checked out today" });
+      return res.status(400).json({ message: "Already checked-out" });
     }
 
     const employee = await Employee.findById(employeeId);
     const adminSettingsRaw = await Admin.findById(employee.createdBy).select("attendanceSettings");
     const settings = normalizeSettings(adminSettingsRaw?.attendanceSettings || {});
 
-    const now = moment().tz("Asia/Kolkata");
+    // if last break still active → auto end it
+    let lastBreak = att.breaks[att.breaks.length - 1];
+    if (lastBreak && !lastBreak.end) {
+      lastBreak.end = now.toDate();
+    }
+
     att.checkOut = now.toDate();
     att.logout = now.format("HH:mm");
 
-    const diffMs = att.checkOut.getTime() - att.checkIn.getTime();
-    att.totalHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
+    // calculate total working time
+    const totalWorkMs = att.checkOut - att.checkIn;
 
+    // calculate total break time
+    let breakMs = 0;
+    att.breaks.forEach(b => {
+      if (b.start && b.end) breakMs += (b.end - b.start);
+    });
+
+    // final working hours
+    const netWorkHours = (totalWorkMs - breakMs) / (1000 * 60 * 60);
+
+    att.totalHours = Math.max(0, Math.round(netWorkHours * 100) / 100);
+
+    // mark status
     att.remark = getRemark(att.login, att.logout, settings);
     att.status = att.remark;
 
     await att.save();
-    return res.json({ message: "Checked out successfully", att });
+    return res.json({ message: "Checked-out successfully", att });
+
   } catch (err) {
-    console.error("checkOut error:", err);
+    console.error("Checkout error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 // AUTO CHECKOUT
@@ -189,12 +244,27 @@ export const autoCheckOut = async () => {
         continue;
       }
 
+      // If last break is still active, end it at the auto-checkout time.
+      const lastBreak = att.breaks[att.breaks.length - 1];
+      if (lastBreak && !lastBreak.end) {
+        lastBreak.end = expected.toDate();
+      }
+
       // set checkout to expected time (so hours reflect correct)
       att.checkOut = expected.toDate();
       att.logout = expected.format("HH:mm");
 
-      const diffMs = att.checkOut.getTime() - att.checkIn.getTime();
-      att.totalHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
+      const totalWorkMs = att.checkOut.getTime() - att.checkIn.getTime();
+
+      let breakMs = 0;
+      att.breaks.forEach((b) => {
+        if (b.start && b.end) {
+          breakMs += b.end.getTime() - b.start.getTime();
+        }
+      });
+
+      const netWorkMs = totalWorkMs - breakMs;
+      att.totalHours = Math.max(0, Math.round((netWorkMs / (1000 * 60 * 60)) * 100) / 100);
 
       att.remark = getRemark(att.login, att.logout, settings);
       att.status = att.remark;
@@ -436,102 +506,234 @@ export const getSubAdminAttendance = async (req, res) => {
 };
 
 // ADMIN/HR/MANAGER — LUNCH START
-export const adminLunchStart = async (req, res) => {
+// export const adminLunchStart = async (req, res) => {
+//   try {
+//     const adminId = req.user.id;
+//     const now = moment().tz("Asia/Kolkata");
+//     const dateOnly = new Date(now.format("YYYY-MM-DD"));
+//     const timeStr = now.format("HH:mm");
+
+//     const att = await Attendance.findOne({ user: adminId, date: dateOnly, userModel: "Admin" });
+//     if (!att || !att.checkIn) {
+//       return res.status(400).json({ message: "Please check-in first" });
+//     }
+//     if (att.lunchStartTime) {
+//       return res.status(400).json({ message: "Lunch break already started" });
+//     }
+
+//     att.lunchStartTime = now.toDate();
+//     await att.save();
+//     res.json({ message: `Lunch break started at ${timeStr}`, att });
+//   } catch (err) {
+//     console.error("adminLunchStart error:", err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
+export const adminBreakStart = async (req, res) => {
   try {
     const adminId = req.user.id;
     const now = moment().tz("Asia/Kolkata");
-    const dateOnly = new Date(now.format("YYYY-MM-DD"));
-    const timeStr = now.format("HH:mm");
 
-    const att = await Attendance.findOne({ user: adminId, date: dateOnly, userModel: "Admin" });
+    const dateOnly = new Date(now.format("YYYY-MM-DD"));
+    const todayStart = now.clone().startOf("day").toDate();
+    const todayEnd = now.clone().endOf("day").toDate();
+
+    const att = await Attendance.findOne({
+      user: adminId,
+      userModel: "Admin",
+      date: { $gte: todayStart, $lte: todayEnd },
+    });
+
     if (!att || !att.checkIn) {
       return res.status(400).json({ message: "Please check-in first" });
     }
-    if (att.lunchStartTime) {
-      return res.status(400).json({ message: "Lunch break already started" });
+
+    const lastBreak = att.breaks[att.breaks.length - 1];
+    if (lastBreak && !lastBreak.end) {
+      return res.status(400).json({ message: "Break already started" });
     }
 
-    att.lunchStartTime = now.toDate();
+    att.breaks.push({
+      start: now.toDate(),
+      end: null
+    });
+
     await att.save();
-    res.json({ message: `Lunch break started at ${timeStr}`, att });
+
+    return res.json({ message: "Break started successfully", att });
+
   } catch (err) {
-    console.error("adminLunchStart error:", err);
+    console.error("adminBreakStart error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
+
+
+
 // ADMIN/HR/MANAGER — LUNCH END
-export const adminLunchEnd = async (req, res) => {
+// export const adminLunchEnd = async (req, res) => {
+//   try {
+//     const adminId = req.user.id;
+//     const now = moment().tz("Asia/Kolkata");
+//     const dateOnly = new Date(now.format("YYYY-MM-DD"));
+//     const timeStr = now.format("HH:mm");
+
+//     const att = await Attendance.findOne({ user: adminId, date: dateOnly, userModel: "Admin" });
+//     if (!att || !att.lunchStartTime) {
+//       return res.status(400).json({ message: "No lunch break started yet" });
+//     }
+//     if (att.lunchEndTime) {
+//       return res.status(400).json({ message: "Lunch break already ended" });
+//     }
+
+//     att.lunchEndTime = now.toDate();
+//     await att.save();
+//     res.json({ message: `Back to work at ${timeStr}`, att });
+//   } catch (err) {
+//     console.error("adminLunchEnd error:", err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
+export const adminBreakEnd = async (req, res) => {
   try {
     const adminId = req.user.id;
     const now = moment().tz("Asia/Kolkata");
+
     const dateOnly = new Date(now.format("YYYY-MM-DD"));
-    const timeStr = now.format("HH:mm");
+    const todayStart = now.clone().startOf("day").toDate();
+    const todayEnd = now.clone().endOf("day").toDate();
 
-    const att = await Attendance.findOne({ user: adminId, date: dateOnly, userModel: "Admin" });
-    if (!att || !att.lunchStartTime) {
-      return res.status(400).json({ message: "No lunch break started yet" });
-    }
-    if (att.lunchEndTime) {
-      return res.status(400).json({ message: "Lunch break already ended" });
+    const att = await Attendance.findOne({
+      user: adminId,
+      userModel: "Admin",
+      date: { $gte: todayStart, $lte: todayEnd },
+    });
+
+    if (!att || att.breaks.length === 0) {
+      return res.status(400).json({ message: "No break started yet" });
     }
 
-    att.lunchEndTime = now.toDate();
+    const lastBreak = att.breaks[att.breaks.length - 1];
+    if (lastBreak.end) {
+      return res.status(400).json({ message: "Break already ended" });
+    }
+
+    lastBreak.end = now.toDate();
+
     await att.save();
-    res.json({ message: `Back to work at ${timeStr}`, att });
+
+    return res.json({ message: "Back to work", att });
+
   } catch (err) {
-    console.error("adminLunchEnd error:", err);
+    console.error("adminBreakEnd error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
+
+
+
 
 
 // EMPLOYEE — LUNCH START
-export const lunchStart = async (req, res) => {
+// export const lunchStart = async (req, res) => {
+//   try {
+//     const employeeId = req.user.id;
+//     const now = moment().tz("Asia/Kolkata");
+//     const dateOnly = new Date(now.format("YYYY-MM-DD"));
+//     const timeStr = now.format("HH:mm");
+
+//     const att = await Attendance.findOne({ user: employeeId, date: dateOnly });
+//     if (!att || !att.checkIn) {
+//       return res.status(400).json({ message: "Please check-in before lunch break" });
+//     }
+//     if (att.lunchStartTime) {
+//       return res.status(400).json({ message: "Lunch break already started" });
+//     }
+
+//     att.lunchStartTime = now.toDate();
+//     await att.save();
+//     res.json({ message: `Lunch break started at ${timeStr}`, att });
+//   } catch (err) {
+//     console.error("lunchStart error:", err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
+export const startBreak = async (req, res) => {
   try {
-    const employeeId = req.user.id;
+    const userId = req.user.id;
     const now = moment().tz("Asia/Kolkata");
     const dateOnly = new Date(now.format("YYYY-MM-DD"));
-    const timeStr = now.format("HH:mm");
 
-    const att = await Attendance.findOne({ user: employeeId, date: dateOnly });
+    const att = await Attendance.findOne({ user: userId, date: dateOnly });
     if (!att || !att.checkIn) {
-      return res.status(400).json({ message: "Please check-in before lunch break" });
-    }
-    if (att.lunchStartTime) {
-      return res.status(400).json({ message: "Lunch break already started" });
+      return res.status(400).json({ message: "Please check-in first" });
     }
 
-    att.lunchStartTime = now.toDate();
+
+    const lastBreak = att.breaks[att.breaks.length - 1];
+    if (lastBreak && !lastBreak.end) {
+      return res.status(400).json({ message: "Break already started" });
+    }
+
+    att.breaks.push({ start: now.toDate(), end: null });
     await att.save();
-    res.json({ message: `Lunch break started at ${timeStr}`, att });
+
+    return res.json({ message: "Break started", att });
   } catch (err) {
-    console.error("lunchStart error:", err);
+    console.error("startBreak error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
+
 // EMPLOYEE — LUNCH END
-export const lunchEnd = async (req, res) => {
+// export const lunchEnd = async (req, res) => {
+//   try {
+//     const employeeId = req.user.id;
+//     const now = moment().tz("Asia/Kolkata");
+//     const dateOnly = new Date(now.format("YYYY-MM-DD"));
+//     const timeStr = now.format("HH:mm");
+
+//     const att = await Attendance.findOne({ user: employeeId, date: dateOnly });
+//     if (!att || !att.lunchStartTime) {
+//       return res.status(400).json({ message: "No lunch break started yet" });
+//     }
+//     if (att.lunchEndTime) {
+//       return res.status(400).json({ message: "Lunch break already ended" });
+//     }
+
+//     att.lunchEndTime = now.toDate();
+//     await att.save();
+//     res.json({ message: `Back to work at ${timeStr}`, att });
+//   } catch (err) {
+//     console.error("lunchEnd error:", err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
+
+export const endBreak = async (req, res) => {
   try {
-    const employeeId = req.user.id;
+    const userId = req.user.id;
     const now = moment().tz("Asia/Kolkata");
     const dateOnly = new Date(now.format("YYYY-MM-DD"));
-    const timeStr = now.format("HH:mm");
 
-    const att = await Attendance.findOne({ user: employeeId, date: dateOnly });
-    if (!att || !att.lunchStartTime) {
-      return res.status(400).json({ message: "No lunch break started yet" });
-    }
-    if (att.lunchEndTime) {
-      return res.status(400).json({ message: "Lunch break already ended" });
+    const att = await Attendance.findOne({ user: userId, date: dateOnly });
+    if (!att) {
+      return res.status(400).json({ message: "No attendance found" });
     }
 
-    att.lunchEndTime = now.toDate();
+    const lastBreak = att.breaks[att.breaks.length - 1];
+    if (!lastBreak || lastBreak.end) {
+      return res.status(400).json({ message: "No break in progress" });
+    }
+
+    lastBreak.end = now.toDate();
     await att.save();
-    res.json({ message: `Back to work at ${timeStr}`, att });
+
+    return res.json({ message: "Back to work", att });
   } catch (err) {
-    console.error("lunchEnd error:", err);
+    console.error("endBreak error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

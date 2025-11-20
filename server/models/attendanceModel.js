@@ -26,7 +26,14 @@ const attendanceSchema = new Schema(
     remark: { type: String },
     lunchStartTime: { type: Date },
     lunchEndTime: { type: Date },
+    breaks: [
+  {
+    start: Date,
+    end: Date
+  }
+]
   },
+  
   { timestamps: true }
 );
 
