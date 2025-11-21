@@ -24,6 +24,7 @@ const AttendanceTable = ({ records, loading, userType, onRowClick }) => {
             <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>
             <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Check-In</th>
             <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Check-Out</th>
+            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Total Time</th>
             <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Total Break</th>
             <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider rounded-tr-lg">Actions</th>
           </tr>
@@ -43,6 +44,7 @@ const AttendanceTable = ({ records, loading, userType, onRowClick }) => {
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm">{record.avgCheckIn}</td>
               <td className="px-6 py-4 whitespace-nowrap text-sm">{record.avgCheckOut}</td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm">{record.totalWorkTime || "-"}</td>
               <td className="px-6 py-4 whitespace-nowrap text-sm">{record.totalBreakTime}</td>
               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                 <button onClick={() => onRowClick(record)} className="text-blue-600 hover:text-blue-900">
@@ -76,6 +78,18 @@ const AttendanceTracker = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Helper to calculate total work time between checkIn and checkOut
+  const calculateWorkDuration = (checkIn, checkOut) => {
+    if (!checkIn || !checkOut) return "-";
+    const start = new Date(checkIn);
+    const end = new Date(checkOut);
+    if (isNaN(start) || isNaN(end) || end <= start) return "-";
+    const totalMs = end - start;
+    const hrs = Math.floor(totalMs / 3600000);
+    const mins = Math.floor((totalMs % 3600000) / 60000);
+    return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+  };
+
   // Helper to calculate total break time
   const calculateTotalBreak = (breaks = []) => {
     if (!breaks || breaks.length === 0) return "-";
@@ -91,6 +105,13 @@ const AttendanceTracker = () => {
     return `${minutes} min`;
   };
 
+  // Helper: robust half-day detection from attendance record
+  const isHalfDayRecord = (attendance) => {
+    if (!attendance) return false;
+    const v = ((attendance.status || attendance.remark || '') + '').toString().toLowerCase();
+    return v.includes('half');
+  };
+
   useEffect(() => {
     const fetchEmployeeAttendance = async (date) => {
       setLoading(true);
@@ -102,7 +123,11 @@ const AttendanceTracker = () => {
 
         // 2. Fetch attendance for the selected date
         const attendanceRes = await API.get(`/attendance?date=${formattedDate}`);
-        const attendanceMap = new Map(attendanceRes.data.map(att => [att.user?._id, att]));
+        // API may return either an array or an object { settings, records }
+        const attendanceArray = Array.isArray(attendanceRes.data)
+          ? attendanceRes.data
+          : (attendanceRes.data?.records || []);
+        const attendanceMap = new Map(attendanceArray.map(att => [att.user?._id, att]));
 
         // 3. Merge the two lists
         const mergedRecords = allEmployees.map(emp => {
@@ -116,15 +141,17 @@ const AttendanceTracker = () => {
               role: emp.position || "-",
               email: emp.email,
               phone: emp.phone,
-              breaks: attendance.breaks || [],
-              avgCheckIn: attendance.checkIn ? dayjs(attendance.checkIn).format("HH:mm") : "-",
-              avgCheckOut: attendance.checkOut ? dayjs(attendance.checkOut).format("HH:mm") : "-",
-              status: attendance.status || "Present", // Default to Present if record exists
-              totalBreakTime: calculateTotalBreak(attendance.breaks),
+                breaks: attendance.breaks || [],
+                avgCheckIn: attendance.checkIn ? dayjs(attendance.checkIn).format("HH:mm") : "-",
+                avgCheckOut: attendance.checkOut ? dayjs(attendance.checkOut).format("HH:mm") : "-",
+                status: attendance.status || "Present", // Default to Present if record exists
+                totalBreakTime: calculateTotalBreak(attendance.breaks),
+                totalWorkTime: calculateWorkDuration(attendance.checkIn, attendance.checkOut),
+                halfDayCount: isHalfDayRecord(attendance) ? 1 : 0,
             };
           } else {
             // Employee is absent
-            return { ...emp, id: emp._id, status: "Absent", avgCheckIn: "-", avgCheckOut: "-" };
+            return { ...emp, id: emp._id, status: "Absent", avgCheckIn: "-", avgCheckOut: "-", totalWorkTime: "-", halfDayCount: 0 };
           }
         });
 
@@ -148,7 +175,10 @@ const AttendanceTracker = () => {
         // 2. Fetch all admin attendance records for the day
         const formattedDate = dayjs(date).format("YYYY-MM-DD");
         const attendanceRes = await API.get(`/attendance/admin/all?date=${formattedDate}`);
-        const attendanceMap = new Map(attendanceRes.data.map(att => [att.user?._id, att]));
+        const attendanceArray = Array.isArray(attendanceRes.data)
+          ? attendanceRes.data
+          : (attendanceRes.data?.records || []);
+        const attendanceMap = new Map(attendanceArray.map(att => [att.user?._id, att]));
 
         // 3. Merge the two lists
         const mergedRecords = allSubAdmins.map(admin => {
@@ -162,9 +192,11 @@ const AttendanceTracker = () => {
               avgCheckOut: attendance.checkOut ? dayjs(attendance.checkOut).format("HH:mm") : "-",
               status: attendance.status || "Present",
               totalBreakTime: calculateTotalBreak(attendance.breaks),
+              totalWorkTime: calculateWorkDuration(attendance.checkIn, attendance.checkOut),
+              halfDayCount: isHalfDayRecord(attendance) ? 1 : 0,
             };
           } else {
-            return { ...admin, id: admin._id, status: "Absent", avgCheckIn: "-", avgCheckOut: "-" };
+            return { ...admin, id: admin._id, status: "Absent", avgCheckIn: "-", avgCheckOut: "-", totalWorkTime: "-", halfDayCount: 0 };
           }
         });
         setAdminRecords(mergedRecords);
@@ -195,6 +227,7 @@ const AttendanceTracker = () => {
     { title: "Present", value: currentRecords.filter((e) => e.status === "Present").length, icon: <CheckCircle className="text-green-500" /> },
     { title: "Absent", value: currentRecords.filter((e) => e.status === "Absent").length, icon: <Cancel className="text-red-500" /> },
     { title: "Late", value: currentRecords.filter((e) => e.status === "Late" || e.status === "Late Login").length, icon: <AccessTime className="text-yellow-500" /> },
+    { title: "Half Days", value: currentRecords.filter((e) => Number(e.halfDayCount) === 1).length, icon: <CalendarMonth className="text-indigo-500" /> },
   ];
 
   return (
@@ -248,7 +281,7 @@ const AttendanceTracker = () => {
       ) : (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
             {attendanceSummary.map((summary, index) => (
               <div key={index} className="shadow rounded-lg p-4 flex items-center gap-4 ">
                 <div>{summary.icon}</div>

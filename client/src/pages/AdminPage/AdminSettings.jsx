@@ -63,6 +63,7 @@ export default function AdminSettings() {
     officeEndTime: "18:00",
     halfDayCheckoutCutoff: "17:00",
     autoCheckoutTime: "18:00",
+    breakDurationMinutes:40,
   });
   // Office Time Settings
   const [officeSettings, setOfficeSettings] = useState({
@@ -72,6 +73,7 @@ export default function AdminSettings() {
     officeEndTime: "",
     halfDayCheckoutCutoff: "",
     autoCheckoutTime: "",
+    breakDurationMinutes:"",
   });
   const [loadingOfficeSettings, setLoadingOfficeSettings] = useState(true);
   // Load data
@@ -399,6 +401,13 @@ export default function AdminSettings() {
                     name="autoCheckoutTime"
                     type="time"
                     value={officeSettings.autoCheckoutTime}
+                    onChange={handleOfficeSettingsChange}
+                    icon={<Power size={16} className="text-gray-400" />}
+                  />
+                   <SettingInput
+                    label="breakDurationMinutes"
+                    type="number" name="breakDurationMinutes" 
+                    value={officeSettings.breakDurationMinutes}
                     onChange={handleOfficeSettingsChange}
                     icon={<Power size={16} className="text-gray-400" />}
                   />

@@ -460,6 +460,7 @@ export const updateAdminSettings = async (req, res) => {
       halfDayLoginCutoff: payload.halfDayLoginCutoff, // Use the standardized name
       halfDayCheckoutCutoff: payload.halfDayCheckoutCutoff ?? payload.half_day_checkout_cutoff,
       autoCheckoutTime: payload.autoCheckoutTime ?? payload.auto_checkout_time,
+      breakDurationMinutes: payload.breakDurationMinutes !== undefined ? Number(payload.breakDurationMinutes) : undefined,
     };
 
     const admin = await Admin.findById(req.user.id);

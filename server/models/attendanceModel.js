@@ -27,11 +27,15 @@ const attendanceSchema = new Schema(
     lunchStartTime: { type: Date },
     lunchEndTime: { type: Date },
     breaks: [
-  {
-    start: Date,
-    end: Date
-  }
-]
+      {
+        start: Date,
+        end: Date,
+        // countedEnd: capped end used when calculating working hours (server-side)
+        countedEnd: Date,
+        // exceeded: boolean flag to indicate break exceeded allowed duration
+        exceeded: { type: Boolean, default: false },
+      },
+    ],
   },
   
   { timestamps: true }
