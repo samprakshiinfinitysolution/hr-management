@@ -23,6 +23,7 @@ import uploadRoutes from "./routes/uploadRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 import policyRoutes from "./routes/policyRoutes.js";
 import eodRoutes from "./routes/eodRoutes.js";
+import eodTemplateRoutes from "./routes/eodTemplateRoutes.js";
 dotenv.config();
 
 const app = express();
@@ -83,6 +84,7 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/policies", policyRoutes);
 app.use("/api/eod", eodRoutes);
+app.use("/eod-template", eodTemplateRoutes);
 app.use("/api", employeeRoutes); 
 
 // Run auto-checkout every 1 minute

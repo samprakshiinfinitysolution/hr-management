@@ -24,6 +24,7 @@ export default function EmpEodReports() {
   const [hasCheckedInToday, setHasCheckedInToday] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isViewOnly, setIsViewOnly] = useState(false); // if selected date is past -> view only
+  const [columns, setColumns] = useState(["time", "task", "description", "status", "remarks"]);
 
   // live clock for EOD time (Option A)
   const [nowClock, setNowClock] = useState(new Date());
@@ -45,11 +46,21 @@ export default function EmpEodReports() {
   const todayString = () => new Date().toISOString().split("T")[0];
 
   useEffect(() => {
-    fetchAllEodReports();
-    fetchMyAttendance();
-    // start live clock (update every 1s or 30s; using 1s for smoothness)
-    clockRef.current = setInterval(() => setNowClock(new Date()), 1000);
-    return () => clearInterval(clockRef.current);
+    const initialize = async () => {
+      // 1. Fetch the global template first to get the correct columns
+      await fetchTemplate();
+
+      // 2. Fetch attendance to know if user can submit an EOD
+      const attendance = await fetchMyAttendance();
+
+      // 3. Then, fetch all reports, passing attendance to it.
+      await fetchAllEodReports(attendance);
+
+      // 4. Start the live clock
+      clockRef.current = setInterval(() => setNowClock(new Date()), 1000);
+    };
+    initialize();
+    return () => clearInterval(clockRef.current); // Cleanup clock on unmount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -74,6 +85,7 @@ export default function EmpEodReports() {
             prev.reportingTime ||
             (todayRec.login ? todayRec.login : moment(todayRec.checkIn).tz("Asia/Kolkata").format("HH:mm")),
         }));
+        return todayRec;
       } else {
         setAttendanceToday(null);
         setHasCheckedInToday(false);
@@ -82,10 +94,23 @@ export default function EmpEodReports() {
       console.error("fetchMyAttendance:", err);
       toast.error("Could not load attendance");
       setHasCheckedInToday(false);
+      return null;
     }
   };
 
-  const fetchAllEodReports = async () => {
+  const fetchTemplate = async () => {
+    try {
+      const res = await API.get("/eod/eod-template");
+      if (res.data && Array.isArray(res.data.columns)) {
+        setColumns(res.data.columns);
+      }
+    } catch (err) {
+      console.error("Failed to fetch EOD template", err);
+      // Fallback to default columns on error
+      setColumns(["time", "task", "description", "status", "remarks"]);
+    }
+  };
+  const fetchAllEodReports = async (attendance) => {
     setIsLoading(true);
     try {
       const res = await API.get("/eod/my");
@@ -110,15 +135,18 @@ export default function EmpEodReports() {
       if (!hasToday) options.unshift({ _id: "today", date: today });
 
       setAllReports(options);
+      if (reports.length > 0 && reports[0].columns) {
+        setColumns(reports[0].columns);
+      }
 
-      // Auto-select today's report (if exists) else set to today (new)
-      if (hasToday) {
-        setSelectedDate(today);
-        const rep = byDate.find((r) => (r.date?.split("T")[0] || r.date) === today);
-        if (rep) loadReportData(rep);
+      const todaysReport = byDate.find((r) => (r.date?.split("T")[0] || r.date) === today);
+
+      if (todaysReport) {
+        // If a report for today already exists, load it
+        loadReportData(todaysReport);
       } else {
-        // fresh new form for today
-        resetFormForToday();
+        // Otherwise, set up a fresh new form for today
+        resetFormForToday(attendance);
       }
     } catch (err) {
       console.error("fetchAllEodReports:", err);
@@ -144,18 +172,18 @@ export default function EmpEodReports() {
       summary: report.summary || "",
       nextDayPlan: report.nextDayPlan || "",
     });
-    setRows(report.rows || defaultRows);
+    setRows(Array.isArray(report.rows) && report.rows.length > 0 ? report.rows : defaultRows);
     setSelectedDate(dateOnly);
     setIsViewOnly(!isToday); // if not today -> view-only
   };
 
-  const resetFormForToday = () => {
+  const resetFormForToday = (attendance) => {
     setForm({
       date: todayString(),
       reportingTime:
-        attendanceToday?.login ||
-        (attendanceToday?.checkIn
-          ? moment(attendanceToday.checkIn).tz("Asia/Kolkata").format("HH:mm")
+        attendance?.login ||
+        (attendance?.checkIn
+          ? moment(attendance.checkIn).tz("Asia/Kolkata").format("HH:mm")
           : ""),
       name: "",
       eodTime: moment(nowClock).format("HH:mm"),
@@ -178,11 +206,9 @@ export default function EmpEodReports() {
       // load existing report (view only if not today)
       loadReportData(selected);
     } else if (selected && selected._id === "today") {
-      // today placeholder (no saved report) -> new form
-      resetFormForToday();
+      resetFormForToday(attendanceToday);
     } else {
-      // fallback
-      resetFormForToday();
+      resetFormForToday(attendanceToday);
     }
   };
 
@@ -208,48 +234,70 @@ export default function EmpEodReports() {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!hasCheckedInToday) {
-      toast.error("Please check-in before submitting EOD.");
-      return;
+ const handleSubmit = async (e) => {
+  e.preventDefault();
+
+  // Check-in validation
+  if (!hasCheckedInToday) {
+    toast.error("Please check-in before submitting EOD.");
+    return;
+  }
+
+  // Safe date comparison (ISO format)
+  const todayISO = new Date().toISOString().split("T")[0];
+  const formISO = new Date(form.date).toISOString().split("T")[0];
+
+  if (formISO !== todayISO) {
+    toast.error("You can only submit today's EOD.");
+    return;
+  }
+
+  try {
+    setIsLoading(true);
+
+    // Auto-fill reporting time
+    const reportingTimeToSend =
+      form.reportingTime ||
+      (attendanceToday?.login
+        ? attendanceToday.login
+        : attendanceToday?.checkIn
+        ? moment(attendanceToday.checkIn).tz("Asia/Kolkata").format("HH:mm")
+        : "");
+
+    // Live EOD time
+    const eodTimeToSend = moment(nowClock).format("HH:mm");
+
+    // FINAL payload (safe structure)
+    const payload = {
+      date: formISO,
+      reportingTime: reportingTimeToSend,
+      eodTime: eodTimeToSend,
+      project: form.project || "",
+      summary: form.summary || "",
+      nextDayPlan: form.nextDayPlan || "",
+      rows: [...rows],        // employee filled rows
+      columns: [...columns],  // template columns (important!)
+    };
+
+    const res = await API.post("/eod", payload);
+
+    toast.success("EOD saved successfully");
+
+    // Reload all reports (so UI refreshes)
+    await fetchAllEodReports();
+
+    if (res.data) {
+      loadReportData(res.data); // show saved EOD
     }
-    // ensure date is today (safety)
-    if (form.date !== todayString()) {
-      toast.error("Can only submit EOD for today.");
-      return;
-    }
 
-    try {
-      setIsLoading(true);
-      // ensure reportingTime comes from attendance if available
-      const reportingTimeToSend =
-        form.reportingTime ||
-        (attendanceToday?.login ? attendanceToday.login : moment(attendanceToday.checkIn).tz("Asia/Kolkata").format("HH:mm"));
+  } catch (err) {
+    console.error("submit EOD:", err);
+    toast.error(err.response?.data?.message || "Failed to save EOD");
+  } finally {
+    setIsLoading(false);
+  }
+};
 
-      const eodTimeToSend = moment(nowClock).format("HH:mm");
-
-      const payload = {
-        ...form,
-        reportingTime: reportingTimeToSend,
-        eodTime: eodTimeToSend,
-        rows,
-      };
-
-      const res = await API.post("/eod", payload);
-      toast.success("EOD saved");
-
-      // reload list and load saved report
-      await fetchAllEodReports();
-      const saved = res.data;
-      if (saved) loadReportData(saved);
-    } catch (err) {
-      console.error("submit EOD:", err);
-      toast.error(err.response?.data?.message || "Failed to save EOD");
-    } finally {
-      setIsLoading(false);
-    }
-  };
   const getStatusColor = (status) => {
     switch (status) {
       case "Done":
@@ -350,7 +398,7 @@ export default function EmpEodReports() {
         {/* Rows table */}
         <div className="overflow-x-auto mb-6">
           <table className="w-full border dark:border-gray-600">
-            <thead>
+            {/* <thead>
               <tr>
                 <th className="border p-2 text-sm">Time</th>
                 <th className="border p-2 text-sm">Task / Project</th>
@@ -358,8 +406,17 @@ export default function EmpEodReports() {
                 <th className="border p-2 text-sm">Status</th>
                 <th className="border p-2 text-sm">Remarks</th>
               </tr>
+            </thead> */}
+            <thead>
+              <tr>
+                {columns.map(col => (
+                  <th key={col} className="border p-2 text-sm">
+                    {col.charAt(0).toUpperCase() + col.slice(1)}
+                  </th>
+                ))}
+              </tr>
             </thead>
-            <tbody>
+            {/* <tbody>
               {rows.map((row, i) => (
                 <tr key={i}>
                   <td
@@ -428,6 +485,38 @@ export default function EmpEodReports() {
                         }`}
                     />
                   </td>
+                </tr>
+              ))}
+            </tbody> */}
+            <tbody>
+              {rows.map((row, i) => (
+                <tr key={i}>
+                  {columns.map((col) => (
+                    <td key={col} className="border p-2 text-sm">
+                      {col === "status" ? (
+                        <select
+                          value={row[col] || ""}
+                          disabled={formDisabled}
+                          onChange={(e) => handleRowChange(i, col, e.target.value)}
+                          className={`w-full p-1 border rounded-sm text-sm ${getStatusColor(row[col])}`}
+                        >
+                          <option value="">Select</option>
+                          <option value="Done">Done</option>
+                          <option value="Pending">Pending</option>
+                          <option value="Working">Working</option>
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={row[col] || ""}
+                          readOnly={formDisabled || row.task?.includes("Break")}
+                          onChange={(e) => handleRowChange(i, col, e.target.value)}
+                          className={`w-full p-1 border rounded-sm text-sm ${row.task?.includes("Break") ? "bg-gray-300 text-black" : ""
+                            }`}
+                        />
+                      )}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
