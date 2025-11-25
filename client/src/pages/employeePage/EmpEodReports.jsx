@@ -7,6 +7,7 @@ import API from "../../utils/api";
 import moment from "moment-timezone";
 export default function EmpEodReports() {
   const [form, setForm] = useState({
+    _id: null, // Add _id to track the current report
     date: new Date().toISOString().split("T")[0],
     reportingTime: "",
     name: "",
@@ -54,7 +55,7 @@ export default function EmpEodReports() {
       const attendance = await fetchMyAttendance();
 
       // 3. Then, fetch all reports, passing attendance to it.
-      await fetchAllEodReports(attendance);
+      await fetchAllEodReports(attendance, true); // Allow form reset on initial load
 
       // 4. Start the live clock
       clockRef.current = setInterval(() => setNowClock(new Date()), 1000);
@@ -110,7 +111,7 @@ export default function EmpEodReports() {
       setColumns(["time", "task", "description", "status", "remarks"]);
     }
   };
-  const fetchAllEodReports = async (attendance) => {
+  const fetchAllEodReports = async (attendance, shouldResetForm = false) => {
     setIsLoading(true);
     try {
       const res = await API.get("/eod/my");
@@ -143,8 +144,11 @@ export default function EmpEodReports() {
 
       if (todaysReport) {
         // If a report for today already exists, load it
-        loadReportData(todaysReport);
-      } else {
+        // Only load if the selected date is not already today's, to avoid overwriting a just-saved form
+        if (selectedDate !== today) {
+          loadReportData(todaysReport);
+        }
+      } else if (shouldResetForm) {
         // Otherwise, set up a fresh new form for today
         resetFormForToday(attendance);
       }
@@ -160,12 +164,16 @@ export default function EmpEodReports() {
     const dateOnly = report.date?.split("T")[0] || report.date;
     const isToday = dateOnly === todayString();
     setForm({
+      _id: report._id || null, // Store the report's ID
       date: dateOnly,
       reportingTime:
         report.reportingTime ||
-        (attendanceToday?.login
-          ? attendanceToday.login
-          : attendanceToday?.checkIn ? moment(attendanceToday.checkIn).tz("Asia/Kolkata").format("HH:mm") : ""),
+        (attendanceToday // Check if attendanceToday exists first
+          ? attendanceToday.login ||
+            (attendanceToday.checkIn
+              ? moment(attendanceToday.checkIn).tz("Asia/Kolkata").format("HH:mm")
+              : "")
+          : ""), // Fallback to empty string if not available
       name: report.name || "",
       eodTime: report.eodTime || (isToday ? moment(nowClock).format("HH:mm") : ""),
       project: report.project || "",
@@ -179,6 +187,7 @@ export default function EmpEodReports() {
 
   const resetFormForToday = (attendance) => {
     setForm({
+      _id: null, // Reset _id for a new report
       date: todayString(),
       reportingTime:
         attendance?.login ||
@@ -234,20 +243,17 @@ export default function EmpEodReports() {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
- const handleSubmit = async (e) => {
+const handleSubmit = async (e) => {
   e.preventDefault();
 
-  // Check-in validation
+  // 1️⃣ Check-in validation
   if (!hasCheckedInToday) {
     toast.error("Please check-in before submitting EOD.");
     return;
   }
 
-  // Safe date comparison (ISO format)
-  const todayISO = new Date().toISOString().split("T")[0];
-  const formISO = new Date(form.date).toISOString().split("T")[0];
-
-  if (formISO !== todayISO) {
+  // 2️⃣ Only today's EOD allowed
+  if (form.date !== todayString()) {
     toast.error("You can only submit today's EOD.");
     return;
   }
@@ -255,40 +261,45 @@ export default function EmpEodReports() {
   try {
     setIsLoading(true);
 
-    // Auto-fill reporting time
+    // 3️⃣ Safe reporting time
     const reportingTimeToSend =
       form.reportingTime ||
-      (attendanceToday?.login
-        ? attendanceToday.login
-        : attendanceToday?.checkIn
-        ? moment(attendanceToday.checkIn).tz("Asia/Kolkata").format("HH:mm")
-        : "");
+      (attendanceToday
+        ? attendanceToday.login ||
+          (attendanceToday.checkIn
+            ? moment(attendanceToday.checkIn).tz("Asia/Kolkata").format("HH:mm")
+            : "")
+        : ""); // Fallback to empty string if attendanceToday is null
 
-    // Live EOD time
-    const eodTimeToSend = moment(nowClock).format("HH:mm");
-
-    // FINAL payload (safe structure)
+    // 4️⃣ Final payload
     const payload = {
-      date: formISO,
+      _id: form._id, // ⭐ MAIN FIX: Include _id for updates
+      date: form.date,
       reportingTime: reportingTimeToSend,
-      eodTime: eodTimeToSend,
-      project: form.project || "",
-      summary: form.summary || "",
-      nextDayPlan: form.nextDayPlan || "",
-      rows: [...rows],        // employee filled rows
-      columns: [...columns],  // template columns (important!)
+      eodTime: moment(nowClock).format("HH:mm"),
+      project: form.project,
+      summary: form.summary,
+      nextDayPlan: form.nextDayPlan,
+      rows: [...rows],
+      columns: [...columns],
     };
 
-    const res = await API.post("/eod", payload);
+    // 5️⃣ ⭐ MAIN FIX: Always use POST. The backend should handle
+    // create vs. update based on the presence of `_id` in the payload.
+    const res = await API.post("/eod", payload); // ⭐ Response capture
+
+    // ⭐ IMPORTANT: If your backend sends a specific success/failure flag in the response data
+    // (e.g., { success: false, message: "Error" }) even with a 200 status, you can check it here.
+    if (res.data && res.data.success === false) {
+        throw new Error(res.data.message || "Backend reported an error during save.");
+    }
 
     toast.success("EOD saved successfully");
 
-    // Reload all reports (so UI refreshes)
-    await fetchAllEodReports();
-
-    if (res.data) {
-      loadReportData(res.data); // show saved EOD
-    }
+    // 6️⃣ ⭐ MAIN FIX: Reload all data from the server.
+    // This is the most reliable way to ensure the UI shows the correct, saved state.
+    // It avoids all complex client-side state management issues.
+    await fetchAllEodReports(attendanceToday, false);
 
   } catch (err) {
     console.error("submit EOD:", err);
@@ -297,6 +308,7 @@ export default function EmpEodReports() {
     setIsLoading(false);
   }
 };
+
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -492,6 +504,13 @@ export default function EmpEodReports() {
               {rows.map((row, i) => (
                 <tr key={i}>
                   {columns.map((col) => (
+                    // ⭐ MAIN FIX: Render 'time' column as read-only text, not an input.
+                    // This prevents its value from being lost or misinterpreted by the backend.
+                    col === "time" ? (
+                      <td key={col} className="border p-2 text-sm font-semibold">
+                        {row.time}
+                      </td>
+                    ) : (
                     <td key={col} className="border p-2 text-sm">
                       {col === "status" ? (
                         <select
@@ -516,6 +535,7 @@ export default function EmpEodReports() {
                         />
                       )}
                     </td>
+                    )
                   ))}
                 </tr>
               ))}

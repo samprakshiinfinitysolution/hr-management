@@ -33,7 +33,15 @@ export const createEodReport = async (req, res) => {
       return res.status(403).json({ message: "Please check-in before submitting EOD" });
     }
 
-    let existing = await EodReport.findOne({ employee: employeeId, date: dateOnly });
+    // ⭐ FINAL FIX: Query for a DATE RANGE to avoid all timezone issues.
+    // This finds any report for the given employee that falls on that calendar day.
+    const startOfDay = moment(dateOnly).startOf('day').toDate();
+    const endOfDay = moment(dateOnly).endOf('day').toDate();
+
+    let existing = await EodReport.findOne({
+      employee: employeeId,
+      date: { $gte: startOfDay, $lte: endOfDay }
+    });
 
     // if exists, update user-supplied fields only
     if (existing) {
@@ -63,7 +71,7 @@ export const createEodReport = async (req, res) => {
       employee: employee._id,
       name: employee.name,
       project: req.body.project,
-      date: dateOnly,
+      date: startOfDay, // Always save with a consistent start-of-day timestamp
       reportingTime: req.body.reportingTime,
       eodTime: req.body.eodTime,
       summary: req.body.summary,
@@ -160,124 +168,16 @@ export const getMyEodReports = async (req, res) => {
   }
 };
 
-
-/**
- * Admin: update a single EOD but in a safe manner.
- * Body: { form, rows, columns }
- * This will:
- *  - Save a history snapshot of the target report
- *  - Update the target report header/rows (but preserve employees' existing non-empty values when applying template globally)
- *  - Update the global template (if columns/rows provided)
- *  - Globally merge template -> all reports (non-destructive)
- */
-// export const updateEodReportByAdmin = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const { form, rows: adminRows = [], columns: adminColumns = [] } = req.body;
-
-//     const actor = req.user.id;
-
-//     // ---------------------------
-//     // 1. Load selected employee report
-//     // ---------------------------
-//     const target = await EodReport.findById(id);
-//     if (!target) return res.status(404).json({ message: "Report not found" });
-
-//     // history save
-//     await EodReportHistory.create({
-//       reportId: target._id,
-//       snapshot: target.toObject(),
-//       reason: "admin-update",
-//       createdBy: actor,
-//     });
-
-//     // update the selected report rows only
-//     target.rows = adminRows;
-//     if (form) Object.assign(target, form);
-//     await target.save();
-
-//     // ---------------------------
-//     // 2. UPDATE GLOBAL TEMPLATE
-//     // ---------------------------
-//     let template = await EodTemplate.findOne();
-//     if (!template) {
-//       template = await EodTemplate.create({
-//         columns: ["time", "task", "description", "status", "remarks"],
-//         rows: []
-//       });
-//     }
-
-//     // update columns globally
-//     if (adminColumns.length > 0) {
-//       template.columns = adminColumns;
-//     }
-
-//     // ---------------------------
-//     // IMPORTANT:
-//     // Template rows must be PURE STRUCTURE (no employee data)
-//     // ---------------------------
-//     template.rows = adminRows.map(r => {
-//       const obj = {};
-//       template.columns.forEach(col => {
-//         if (col === "time") obj[col] = r[col] || "";   // time only copied
-//         else obj[col] = "";                            // NO employee data ever copied
-//       });
-//       return obj;
-//     });
-
-//     await template.save();
-
-//     // ---------------------------
-//     // 3. APPLY TEMPLATE TO ALL REPORTS
-//     // ---------------------------
-//     const allReports = await EodReport.find();
-
-//     const bulkOps = allReports.map(rep => {
-//       const merged = mergePreserveExisting(
-//         rep.rows,            // employee old data
-//         template.rows,       // pure structure
-//         template.columns
-//       );
-
-//       return {
-//         updateOne: {
-//           filter: { _id: rep._id },
-//           update: {
-//             $set: {
-//               rows: merged,
-//               columns: template.columns
-//             }
-//           }
-//         }
-//       };
-//     });
-
-//     if (bulkOps.length > 0) await EodReport.bulkWrite(bulkOps);
-
-//     return res.json({
-//       message: "Template updated & applied successfully",
-//       report: target,
-//       template,
-//     });
-
-//   } catch (err) {
-//     console.error("Admin update error:", err);
-//     return res.status(500).json({ message: "Admin update failed" });
-//   }
-// };
-
-// -------------------------
-// FINAL WORKING VERSION
-// -------------------------
 export const updateEodReportByAdmin = async (req, res) => {
   try {
     const { id } = req.params;
     const { form, rows: adminRows = [], columns: adminColumns = [] } = req.body;
 
+    // 1) Find selected employee report
     const target = await EodReport.findById(id);
     if (!target) return res.status(404).json({ message: "Report not found" });
 
-    // Save history
+    // 2) Save history
     await EodReportHistory.create({
       reportId: target._id,
       snapshot: target.toObject(),
@@ -285,14 +185,12 @@ export const updateEodReportByAdmin = async (req, res) => {
       createdBy: req.user.id,
     });
 
-    // Update only selected report (header + rows)
+    // 3) Update only selected employee report
     if (form) Object.assign(target, form);
     target.rows = adminRows;
     await target.save();
 
-    // ---------------------------
-    // GLOBAL TEMPLATE UPDATE
-    // ---------------------------
+    // 4) Update template (GLOBAL)
     let template = await EodTemplate.findOne();
     if (!template) {
       template = await EodTemplate.create({
@@ -301,37 +199,45 @@ export const updateEodReportByAdmin = async (req, res) => {
       });
     }
 
-    // update columns
+    // update columns globally
     if (adminColumns.length > 0) template.columns = adminColumns;
 
-    // template rows (structure only)
-    template.rows = adminRows.map(r => {
-      const obj = {};
-      template.columns.forEach(col => {
-        obj[col] = col === "time" ? r[col] || "" : "";
+    // Template → structure only
+    template.rows = adminRows.map((r) => {
+      const o = {};
+      template.columns.forEach((col) => {
+        o[col] = col === "time" ? (r[col] || "") : "";
       });
-      return obj;
+      return o;
     });
 
     await template.save();
 
-    // ---------------------------
-    // APPLY TEMPLATE TO ALL REPORTS (DELETE FIX)
-    // ---------------------------
-    const all = await EodReport.find();
+    // 5) Apply template globally (ADD + DELETE fixed)
+    const allReports = await EodReport.find();
 
-    const bulkOps = all.map(rep => {
-      const merged = mergePreserveExisting(rep.rows, template.rows, template.columns);
+    const bulkOps = allReports.map((rep) => {
+      let merged = mergePreserveExisting(
+        rep.rows,          // employee data
+        template.rows,     // new structure
+        template.columns
+      );
+
+      // ❗ DELETE FIX: remove extra rows for all employees
+      if (merged.length > template.rows.length) {
+        merged = merged.slice(0, template.rows.length);
+      }
+
       return {
         updateOne: {
           filter: { _id: rep._id },
           update: {
             $set: {
               rows: merged,
-              columns: template.columns
-            }
-          }
-        }
+              columns: template.columns,
+            },
+          },
+        },
       };
     });
 
@@ -345,11 +251,9 @@ export const updateEodReportByAdmin = async (req, res) => {
 
   } catch (err) {
     console.error("Admin update error:", err);
-    return res.status(500).json({ message: "Admin update failed" });
+    res.status(500).json({ message: "Admin update failed" });
   }
 };
-
-
 
 /**
  * Get the global EOD template
@@ -369,42 +273,6 @@ export const getEodTemplate = async (req, res) => {
     res.status(500).json({ message: "Server error fetching template" });
   }
 };
-
-/**
- * PUT /eod-template
- * Admin can update template.
- */
-// export const updateEodTemplate = async (req, res) => {
-//   try {
-//     const { columns, rows } = req.body;
-//     const tplUpdate = {};
-//     if (Array.isArray(columns) && columns.length > 0) tplUpdate.columns = columns;
-//     if (Array.isArray(rows) && rows.length > 0) tplUpdate.rows = rows;
-
-//     const tpl = await EodTemplate.findOneAndUpdate({}, tplUpdate, { upsert: true, new: true });
-
-//     // Run non-destructive merge across all reports using new template rows
-//     const tplRows = Array.isArray(tpl.rows) && tpl.rows.length > 0 ? tpl.rows : [];
-
-//     const allReports = await EodReport.find({});
-//     const bulkOps = allReports.map((r) => {
-//       const merged = mergePreserveExisting(r.rows || [], tplRows);
-//       return {
-//         updateOne: {
-//           filter: { _id: r._id },
-//           update: { $set: { rows: merged, columns: tpl.columns || r.columns } },
-//         },
-//       };
-//     });
-
-//     if (bulkOps.length > 0) await EodReport.bulkWrite(bulkOps);
-
-//     res.json({ message: "Template updated and applied", template: tpl });
-//   } catch (err) {
-//     console.error("updateEodTemplate:", err);
-//     res.status(500).json({ message: err.message });
-//   }
-// };
 export const updateEodTemplate = async (req, res) => {
   try {
     const { columns, rows } = req.body;
@@ -436,4 +304,3 @@ export const updateEodTemplate = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
