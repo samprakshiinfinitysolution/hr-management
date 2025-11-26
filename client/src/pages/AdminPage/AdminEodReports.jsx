@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import API from "../../utils/api";
 import { toast } from "react-hot-toast";
+import { X } from "lucide-react";
 
 export default function AdminEodReports() {
   const [form, setForm] = useState({
@@ -25,7 +26,7 @@ export default function AdminEodReports() {
   const [editForm, setEditForm] = useState(null);
   const [editRows, setEditRows] = useState([]);
   const [modalDelete, setModalDelete] = useState({ open: false, index: null });
-
+  const [modalDeleteColumn, setModalDeleteColumn] = useState({ open: false, column: null });
   // TEMPLATE (GLOBAL)
   const [templateColumns, setTemplateColumns] = useState([
     "time",
@@ -228,41 +229,41 @@ export default function AdminEodReports() {
 
   // Delete row
   const handleDeleteColumn = async (col) => {
-  // Remove from template & UI
-  const filtered = editColumns.filter((c) => c !== col);
+    // Remove from template & UI
+    const filtered = editColumns.filter((c) => c !== col);
 
-  setEditColumns(filtered);
-  setTemplateColumns(filtered);
+    setEditColumns(filtered);
+    setTemplateColumns(filtered);
 
-  // Delete from current edit rows
-  const newRows = editRows.map((r) => {
-    const copy = { ...r };
-    delete copy[col];
-    return copy;
-  });
-
-  setEditRows(newRows);
-
-  // Also fix templateRows so mismatch na ho
-  const newTemplateRows = templateRows.map((r) => {
-    const copy = { ...r };
-    delete copy[col];
-    return copy;
-  });
-  setTemplateRows(newTemplateRows);
-
-  try {
-    await API.put("/eod/eod-template", {
-      columns: filtered,
-      rows: newTemplateRows,
+    // Delete from current edit rows
+    const newRows = editRows.map((r) => {
+      const copy = { ...r };
+      delete copy[col];
+      return copy;
     });
 
-    await fetchTemplate();
-    toast.success("Column removed");
-  } catch (err) {
-    toast.error("Template update failed");
-  }
-};
+    setEditRows(newRows);
+
+    // Also fix templateRows so mismatch na ho
+    const newTemplateRows = templateRows.map((r) => {
+      const copy = { ...r };
+      delete copy[col];
+      return copy;
+    });
+    setTemplateRows(newTemplateRows);
+
+    try {
+      await API.put("/eod/eod-template", {
+        columns: filtered,
+        rows: newTemplateRows,
+      });
+
+      await fetchTemplate();
+      toast.success("Column removed");
+    } catch (err) {
+      toast.error("Template update failed");
+    }
+  };
 
   const deleteRow = (index) => {
     if (isEdit) {
@@ -455,9 +456,9 @@ export default function AdminEodReports() {
                 onChange={handleEmployeeChange}
                 className="w-full p-2 border rounded"
               >
-                <option value="">Select Employee</option>
+                <option value="" className="text-black">Select Employee</option>
                 {employees.map((emp) => (
-                  <option key={emp._id} value={emp._id}>
+                  <option key={emp._id} value={emp._id} className="text-black">
                     {emp.name} - {emp.position}
                   </option>
                 ))}
@@ -507,7 +508,7 @@ export default function AdminEodReports() {
                     .map(rep => {
                       const dateStr = rep.date.split("T")[0];
                       return (
-                        <option key={dateStr} value={dateStr}>
+                        <option key={dateStr} value={dateStr} className="text-black">
                           {formatToDDMMYYYY(rep.date)}
                         </option>
                       );
@@ -548,12 +549,22 @@ export default function AdminEodReports() {
 
                       {isEdit && (
                         <button
-                          onClick={() => handleDeleteColumn(col)}
-                          className="ml-2 text-red-600 font-bold"
+                          onClick={() => setModalDeleteColumn({ open: true, column: col })}
                           type="button"
+                          className="
+    ml-2 px-2 py-0.5 
+    border border-red-400 
+    text-red-600 
+    rounded-md  
+    hover:bg-red-50  
+    hover:border-red-500  
+    hover:text-red-700 
+    transition-all duration-150  
+    text-xs font-bold"
                         >
                           X
                         </button>
+
                       )}
                     </th>
                   ))}
@@ -606,13 +617,12 @@ export default function AdminEodReports() {
 
                       <td className="border p-2 text-center">
                         <button
-                          onClick={() =>
-                            setModalDelete({ open: true, index: i })
-                          }
-                          className="text-sm text-red-600 font-semibold px-3 py-1 rounded border border-red-200"
+                          onClick={() => setModalDelete({ open: true, index: i })}
+                          className="text-sm text-red-600 font-semibold px-3 py-1 rounded border border-red-200 hover:bg-red-50 hover:border-red-400 transition"
                         >
                           Delete
                         </button>
+
                       </td>
                     </tr>
                   ))
@@ -657,35 +667,103 @@ export default function AdminEodReports() {
               </button>
             )}
 
-            {/* DELETE MODAL */}
-            {modalDelete.open && (
-              <div className="fixed inset-0 bg-black/40 flex justify-center items-center">
-                <div className="bg-white p-6 rounded shadow-lg">
-                  <p className="mb-4 font-semibold">Delete this row?</p>
+            {/* COLUMN DELETE MODAL */}
+            {modalDeleteColumn.open && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="rounded-lg p-6 max-w-md w-full bg-white text-black dark:bg-gray-800 dark:text-white shadow-xl">
 
-                  <div className="flex gap-3">
+                  {/* Header */}
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold">Confirm Column Deletion</h2>
                     <button
-                      onClick={() => {
-                        deleteRow(modalDelete.index);
-                        setModalDelete({ open: false, index: null });
-                      }}
-                      className="bg-red-600 text-white px-3 py-2 rounded"
+                      onClick={() =>
+                        setModalDeleteColumn({ open: false, column: null })
+                      }
+                      className="hover:text-gray-700 dark:hover:text-gray-300"
                     >
-                      Delete
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  {/* Message */}
+                  <p className="mb-6 text-gray-700 dark:text-gray-300">
+                    Are you sure you want to delete column{" "}
+                    <span className="font-bold text-red-600">
+                      {modalDeleteColumn.column}
+                    </span>
+                    ? This action cannot be undone.
+                  </p>
+
+                  {/* Buttons */}
+                  <div className="flex justify-end gap-4">
+                    <button
+                      onClick={() =>
+                        setModalDeleteColumn({ open: false, column: null })
+                      }
+                      className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500"
+                    >
+                      Cancel
                     </button>
 
                     <button
-                      onClick={() =>
-                        setModalDelete({ open: false, index: null })
-                      }
-                      className="bg-gray-400 text-white px-3 py-2 rounded"
+                      onClick={() => {
+                        handleDeleteColumn(modalDeleteColumn.column);
+                        setModalDeleteColumn({ open: false, column: null });
+                      }}
+                      className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
                     >
-                      Cancel
+                      Delete
                     </button>
                   </div>
                 </div>
               </div>
             )}
+
+            {/* ROW DELETE MODAL */}
+            {modalDelete.open && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="rounded-lg p-6 max-w-md w-full bg-white text-black dark:bg-gray-800 dark:text-white shadow-xl">
+
+                  {/* Header */}
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold">Delete Row?</h2>
+                    <button
+                      onClick={() => setModalDelete({ open: false, index: null })}
+                      className="hover:text-gray-700 dark:hover:text-gray-300"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  {/* Message */}
+                  <p className="mb-6 text-gray-700 dark:text-gray-300">
+                    Are you sure you want to delete this row?
+                  </p>
+
+                  {/* Buttons */}
+                  <div className="flex justify-end gap-4">
+                    <button
+                      onClick={() => setModalDelete({ open: false, index: null })}
+                      className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500"
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        deleteRow(modalDelete.index);
+                        setModalDelete({ open: false, index: null });
+                      }}
+                      className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+
 
             {/* SAVE BUTTON */}
             {isEdit && (
@@ -715,7 +793,7 @@ export default function AdminEodReports() {
             ) : (
               <textarea
                 readOnly
-                className="w-full p-3 border rounded bg-gray-100"
+                className="w-full p-3 border rounded "
                 value={form.summary}
               />
             )}
@@ -738,7 +816,7 @@ export default function AdminEodReports() {
             ) : (
               <textarea
                 readOnly
-                className="w-full p-3 border rounded bg-gray-100"
+                className="w-full p-3 border rounded "
                 value={form.nextDayPlan}
               />
             )}
