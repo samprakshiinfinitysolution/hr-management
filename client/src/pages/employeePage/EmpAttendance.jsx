@@ -46,6 +46,7 @@ export default function EmpAttendance() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [breaks, setBreaks] = useState([]);
   const [activeBreak, setActiveBreak] = useState(false);
+  const [attendanceSettings, setAttendanceSettings] = useState({});
   const [startBreakLoading, setStartBreakLoading] = useState(false);
   const [endBreakLoading, setEndBreakLoading] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
@@ -73,9 +74,10 @@ export default function EmpAttendance() {
   const fetchHistory = async () => {
     try {
       const res = await API.get("/attendance/me");
-      const arr = Array.isArray(res.data) ? res.data : [];
+      const { records = [], settings = {} } = res.data;
+      setAttendanceSettings(settings);
 
-      const normalized = arr.map((r) => ({
+      const normalized = records.map((r) => ({
         ...r,
         date: r.date ? r.date : r.attendanceDate ? r.attendanceDate : null,
         login: r.checkIn ? new Date(r.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
@@ -110,16 +112,40 @@ export default function EmpAttendance() {
     }
   };
 
-  const getRemark = (login, logout) => {
+  // Dynamic remark logic based on admin settings
+  const getRemark = (login, logout, settings) => {
     if (!login || !logout) return "Incomplete";
-    const [loginHour, loginMin] = login.split(":").map(Number);
-    const [logoutHour, logoutMin] = logout.split(":").map(Number);
-    const loginMins = loginHour * 60 + loginMin;
-    const logoutMins = logoutHour * 60 + logoutMin;
-    if (loginMins > 10 * 60 + 10) return "Late Login"; // After 10:10 AM
-    if (logoutMins < 16 * 60) return "Half Day";
-    if (logoutMins < 17 * 60 + 45) return "Early Checkout";
-    return "Present";
+
+    const toMins = (hhmm) => {
+      if (!hhmm) return 0;
+      const [h, m] = String(hhmm).split(":").map(Number);
+      return h * 60 + m;
+    };
+
+    const loginMins = toMins(login);
+    const logoutMins = toMins(logout);
+
+    // Use default values if settings are not available
+    const officeStart = toMins(settings.officeStartTime || "10:00");
+    const lateGrace = Number(settings.lateGraceMinutes || 15);
+    const halfDayLoginCutoff = toMins(settings.halfDayLoginCutoff || "11:00");
+
+    const halfDayCheckoutCutoff = toMins(settings.halfDayCheckoutCutoff || "17:00");
+    const officeEnd = toMins(settings.officeEndTime || "18:00");
+
+    // LOGIN LOGIC
+    if (loginMins > halfDayLoginCutoff) return "Half Day";
+    if (loginMins > officeStart + lateGrace) return "Late Login";
+
+    // LOGOUT LOGIC
+    if (logoutMins < halfDayCheckoutCutoff) return "Half Day";
+    if (logoutMins < officeEnd) return "Early Checkout";
+
+    // If status was already set to Half Day on login, keep it.
+    const todayRec = history.find(r => toLocalDateStr(r.date) === selectedDate);
+    if (todayRec && todayRec.status === 'Half Day') return 'Half Day';
+
+    return "Present"; // Default if no other conditions met
   };
 
   const handleLogin = async () => {
@@ -137,12 +163,12 @@ export default function EmpAttendance() {
       setLoginLoading(true);
       const now = new Date();
       const absentTime = new Date();
-      absentTime.setHours(13, 30, 0, 0); // 1:30 PM
+      // absentTime.setHours(13, 30, 0, 0); // 1:30 PM
 
-      if (now > absentTime) {
-        toast.error("Cannot check-in after 1:30 PM. You will be marked absent.");
-        return;
-      }
+      // if (now > absentTime) {
+      //   toast.error("Cannot check-in after 1:30 PM. You will be marked absent.");
+      //   return;
+      // }
 
       const timeStr = get24HourTime();
       setLoginTime(timeStr);
@@ -198,7 +224,7 @@ export default function EmpAttendance() {
       console.log("Employee: calling /attendance/checkout");
       const res = await API.post("/attendance/checkout", { date: selectedDate, logout: now });
       console.log("Employee: /attendance/checkout response:", res?.data);
-      const remark = getRemark(loginTime, now);
+      const remark = getRemark(loginTime, now, attendanceSettings);
       if (remark === "Half Day") toast.error("🟡 Half Day — checkout before 4:00 PM");
       else if (remark === "Early Checkout") toast("⚠️ Early checkout before 5:45 PM", { icon: "🕔" });
       else toast.success(`🕒 Checked out successfully at ${now}`);
@@ -482,7 +508,7 @@ export default function EmpAttendance() {
               ) : (
                 <div className="space-y-2 overflow-x-auto">
                   {history.slice(0, 10).map((r, i) => {
-                    const remark = getRemark(r.login, r.logout);
+                    const remark = getRemark(r.login, r.logout, attendanceSettings);
                     const color =
                       remark === "Late Login"
                         ? "text-red-500"

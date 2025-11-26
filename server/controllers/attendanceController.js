@@ -321,10 +321,92 @@ export const autoCheckOut = async () => {
 // GET MY ATTENDANCE (Employee)
 export const getMyAttendance = async (req, res) => {
   try {
-    const records = await Attendance.find({ user: req.user.id }).sort({ date: -1 });
-    res.json(records);
+    const employeeId = req.user.id;
+
+    // 1. Fetch attendance records for the employee
+    const records = await Attendance.find({ user: employeeId }).sort({ date: -1 });
+
+    // 2. Fetch the employee's admin's settings
+    const employee = await Employee.findById(employeeId).select("createdBy");
+    if (!employee) {
+      // If employee not found, just return records without settings
+      return res.json({ records, settings: {} });
+    }
+
+    const adminSettingsRaw = await Admin.findById(employee.createdBy).select("attendanceSettings");
+    const settings = normalizeSettings(adminSettingsRaw?.attendanceSettings || {});
+
+    // 3. Return both records and settings
+    res.json({ records, settings });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+// MANUAL ATTENDANCE ENTRY (by Admin)
+export const manualAttendance = async (req, res) => {
+  try {
+    const { userId, date, status, checkIn, checkOut, remark, breaks } = req.body;
+
+    // Basic validation
+    if (!userId || !date || !status) {
+      return res.status(400).json({ message: "User, date, and status are required." });
+    }
+
+    // Find the employee to get their creator admin ID
+    const employee = await Employee.findById(userId).select("createdBy");
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found." });
+    }
+
+    const dateOnly = new Date(moment(date).tz("Asia/Kolkata").format("YYYY-MM-DD"));
+
+    const updateData = {
+      user: userId,
+      userModel: 'Employee',
+      createdBy: employee.createdBy,
+      date: dateOnly,
+      status: status,
+      remark: remark || `Manually set to ${status} by admin.`,
+      checkIn: checkIn ? new Date(checkIn) : null,
+      checkOut: checkOut ? new Date(checkOut) : null,
+      login: checkIn ? moment(checkIn).tz("Asia/Kolkata").format("HH:mm") : null,
+      logout: checkOut ? moment(checkOut).tz("Asia/Kolkata").format("HH:mm") : null,
+      breaks: (breaks || []).map(b => ({
+        start: b.start ? new Date(b.start) : null,
+        end: b.end ? new Date(b.end) : null,
+        countedEnd: b.end ? new Date(b.end) : null, // For simplicity, countedEnd is same as end
+        exceeded: false,
+      })).filter(b => b.start && b.end), // Only add valid breaks
+    };
+
+    // Calculate totalHours if both checkIn and checkOut are provided
+    if (updateData.checkIn && updateData.checkOut) {
+      const totalWorkMs = updateData.checkOut.getTime() - updateData.checkIn.getTime();
+
+      let breakMs = 0;
+      if (updateData.breaks.length > 0) {
+        breakMs = updateData.breaks.reduce((acc, b) => acc + (b.end.getTime() - b.start.getTime()), 0);
+      }
+
+      const netWorkMs = totalWorkMs - breakMs;
+      updateData.totalHours = Math.max(0, Math.round((netWorkMs / (1000 * 60 * 60)) * 100) / 100);
+    } else {
+      updateData.totalHours = 0;
+    }
+
+    // Use findOneAndUpdate with upsert to create or update the record
+    const attendanceRecord = await Attendance.findOneAndUpdate(
+      { user: userId, date: dateOnly },
+      { $set: updateData },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
+    res.json({ message: "Attendance updated successfully", record: attendanceRecord });
+
+  } catch (err) {
+    console.error("Manual attendance error:", err);
+    res.status(500).json({ message: "Server error during manual attendance update." });
   }
 };
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import API from "../../utils/api";
-import { Close, Email, Phone, Visibility, CalendarMonth, People, CheckCircle, Cancel, AccessTime } from "@mui/icons-material"; // Assuming you use these
+import { Close, Email, Phone, Visibility, CalendarMonth, People, CheckCircle, Cancel, AccessTime, EditCalendar } from "@mui/icons-material"; // Assuming you use these
 import { toast, Toaster } from "react-hot-toast";
 import dayjs from "dayjs";
 
@@ -77,6 +77,17 @@ const AttendanceTracker = () => {
   const [adminRecords, setAdminRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [allEmployees, setAllEmployees] = useState([]);
+  const [filterEmployeeId, setFilterEmployeeId] = useState("");
+  const [isManualEntryModalOpen, setManualEntryModalOpen] = useState(false);
+  const [manualEntryData, setManualEntryData] = useState({
+    status: 'Present',
+    checkIn: '',
+    checkOut: '',
+    breakStart: '',
+    breakEnd: '',
+    remark: '',
+  });
 
   // Helper to calculate total work time between checkIn and checkOut
   const calculateWorkDuration = (checkIn, checkOut) => {
@@ -113,6 +124,18 @@ const AttendanceTracker = () => {
   };
 
   useEffect(() => {
+    const loadAllEmployees = async () => {
+      try {
+        const res = await API.get("/admin/employees");
+        setAllEmployees(res.data || []);
+      } catch (err) {
+        console.log("Failed to load employees");
+      }
+    };
+    loadAllEmployees();
+  }, []);
+
+  useEffect(() => {
     const fetchEmployeeAttendance = async (date) => {
       setLoading(true);
       try {
@@ -141,13 +164,14 @@ const AttendanceTracker = () => {
               role: emp.position || "-",
               email: emp.email,
               phone: emp.phone,
-                breaks: attendance.breaks || [],
-                avgCheckIn: attendance.checkIn ? dayjs(attendance.checkIn).format("HH:mm") : "-",
-                avgCheckOut: attendance.checkOut ? dayjs(attendance.checkOut).format("HH:mm") : "-",
-                status: attendance.status || "Present", // Default to Present if record exists
-                totalBreakTime: calculateTotalBreak(attendance.breaks),
-                totalWorkTime: calculateWorkDuration(attendance.checkIn, attendance.checkOut),
-                halfDayCount: isHalfDayRecord(attendance) ? 1 : 0,
+              breaks: attendance.breaks || [],
+              avgCheckIn: attendance.checkIn ? dayjs(attendance.checkIn).format("HH:mm") : "-",
+              avgCheckOut: attendance.checkOut ? dayjs(attendance.checkOut).format("HH:mm") : "-",
+              status: attendance.status || "Present", // Default to Present if record exists
+              totalBreakTime: calculateTotalBreak(attendance.breaks),
+              totalWorkTime: calculateWorkDuration(attendance.checkIn, attendance.checkOut),
+              remark: attendance.remark, // Pass remark for editing
+              halfDayCount: isHalfDayRecord(attendance) ? 1 : 0,
             };
           } else {
             // Employee is absent
@@ -220,6 +244,81 @@ const AttendanceTracker = () => {
     setSelectedDate(dayjs(e.target.value).toDate());
   };
 
+  const handleManualEntryChange = (e) => {
+    const { name, value } = e.target;
+    setManualEntryData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleOpenManualEntryModal = () => {
+    if (!filterEmployeeId) return;
+
+    const record = employeeRecords.find(rec => rec.id === filterEmployeeId);
+
+    if (record && record.status !== 'Absent') {
+      const firstBreak = record.breaks && record.breaks.length > 0 ? record.breaks[0] : {};
+      setManualEntryData({
+        status: record.status || 'Present',
+        checkIn: record.avgCheckIn !== '-' ? record.avgCheckIn : '',
+        checkOut: record.avgCheckOut !== '-' ? record.avgCheckOut : '',
+        breakStart: firstBreak.start ? dayjs(firstBreak.start).format('HH:mm') : '',
+        breakEnd: firstBreak.end ? dayjs(firstBreak.end).format('HH:mm') : '',
+        remark: record.remark || '',
+      });
+    } else {
+      // Reset for a new entry (or absent employee)
+      setManualEntryData({
+        status: 'Present',
+        checkIn: '',
+        checkOut: '',
+        breakStart: '',
+        breakEnd: '',
+        remark: '',
+      });
+    }
+    setManualEntryModalOpen(true);
+  };
+
+  const handleManualAttendanceSubmit = async (e) => {
+    e.preventDefault();
+    if (!filterEmployeeId || !manualEntryData.status) {
+      toast.error("Please select an employee and a status.");
+      return;
+    }
+
+    const date = dayjs(selectedDate).format("YYYY-MM-DD");
+    const payload = {
+      userId: filterEmployeeId,
+      date: date,
+      status: manualEntryData.status,
+      remark: manualEntryData.remark || `Manually set to ${manualEntryData.status} by admin`,
+      checkIn: manualEntryData.checkIn ? `${date}T${manualEntryData.checkIn}:00` : null,
+      checkOut: manualEntryData.checkOut ? `${date}T${manualEntryData.checkOut}:00` : null,
+      breaks: (manualEntryData.breakStart && manualEntryData.breakEnd) ? [{
+        start: `${date}T${manualEntryData.breakStart}:00`,
+        end: `${date}T${manualEntryData.breakEnd}:00`,
+      }] : [],
+    };
+
+    try {
+      const toastId = toast.loading("Submitting attendance...");
+      await API.post("/attendance/manual", payload);
+
+      toast.success("Attendance marked successfully!", { id: toastId });
+      setManualEntryModalOpen(false);
+
+      // Refresh data for the current view
+      if (activeTab === 'employees') {
+        // Re-trigger the useEffect for fetching data
+        setSelectedDate(new Date(selectedDate.getTime()));
+      } else {
+        // If you implement manual attendance for admins, refresh here too
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to mark attendance.");
+      console.error("Manual attendance error:", err);
+    }
+  };
+
   const currentRecords = activeTab === 'employees' ? employeeRecords : adminRecords;
 
   const attendanceSummary = [
@@ -235,14 +334,41 @@ const AttendanceTracker = () => {
       <Toaster />
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">📅 Attendance Tracker</h1>
-        <div>
-          <label className="text-sm font-medium mr-2">Select Date:</label>
-          <input
-            type="date"
-            value={dayjs(selectedDate).format("YYYY-MM-DD")}
-            onChange={handleDateChange}
-            className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:border-gray-600"
-          />
+        <div className="flex items-center gap-4">
+          <div className="mr-4">
+            <label className="text-sm font-medium mr-2">Select Employee:</label>
+            <select
+              value={filterEmployeeId}
+              onChange={(e) => setFilterEmployeeId(e.target.value)}
+              className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:border-gray-600 "
+            >
+              <option value=""className="text-black ">All Employees</option>
+              {allEmployees.map((emp) => (
+                <option key={emp._id} value={emp._id}className='text-black'>
+                  {emp.name} - {emp.position}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium mr-2">Select Date:</label>
+            <input
+              type="date"
+              value={dayjs(selectedDate).format("YYYY-MM-DD")}
+              onChange={handleDateChange}
+              className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:border-gray-600"
+            />
+          </div>
+
+          <button
+            onClick={handleOpenManualEntryModal}
+            disabled={!filterEmployeeId || activeTab !== 'employees'}
+            className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <EditCalendar fontSize="small" />
+            Mark Attendance
+          </button>
         </div>
       </div>
 
@@ -340,6 +466,71 @@ const AttendanceTracker = () => {
             <div className="mt-6 flex justify-end">
               <button onClick={() => setSelectedEmployee(null)} className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">Close</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Attendance Entry Modal */}
+      {isManualEntryModalOpen && (
+        <div className="fixed inset-0 bg-opacity-50 flex items-center justify-center z-50 p-4 bg-black/50">
+          <div className="rounded-lg p-6 max-w-lg w-full bg-white text-black dark:bg-gray-800 dark:text-white">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Manual Attendance Entry</h2>
+              <button onClick={() => setManualEntryModalOpen(false)} className="hover:text-gray-700">
+                <Close fontSize="small" />
+              </button>
+            </div>
+            <form onSubmit={handleManualAttendanceSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Employee</label>
+                <p className="p-2 bg-gray-100 dark:bg-gray-700 rounded-md">
+                  {allEmployees.find(e => e._id === filterEmployeeId)?.name || 'N/A'}
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Date</label>
+                <p className="p-2 bg-gray-100 dark:bg-gray-700 rounded-md">
+                  {dayjs(selectedDate).format("DD MMMM, YYYY")}
+                </p>
+              </div>
+              <div>
+                <label htmlFor="status" className="block text-sm font-medium mb-1">Status</label>
+                <select name="status" id="status" required value={manualEntryData.status} onChange={handleManualEntryChange} className="w-full p-2 border rounded-lg dark:border-gray-600 ">
+                  <option value="Present" className='text-black'>Present</option>
+                  <option value="Late" className='text-black'>Late</option>
+                  <option value="Absent" className='text-black'>Absent</option>
+                  <option value="Half Day" className='text-black'>Half Day</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="checkIn" className="block text-sm font-medium mb-1">Check-in Time</label>
+                  <input type="time" name="checkIn" id="checkIn" value={manualEntryData.checkIn} onChange={handleManualEntryChange} className="w-full p-2 border rounded-lg dark:border-gray-600 " />
+                </div>
+                <div>
+                  <label htmlFor="checkOut" className="block text-sm font-medium mb-1">Check-out Time</label>
+                  <input type="time" name="checkOut" id="checkOut" value={manualEntryData.checkOut} onChange={handleManualEntryChange} className="w-full p-2 border rounded-lg dark:border-gray-600 " />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="breakStart" className="block text-sm font-medium mb-1">Break Start Time</label>
+                  <input type="time" name="breakStart" id="breakStart" value={manualEntryData.breakStart} onChange={handleManualEntryChange} className="w-full p-2 border rounded-lg dark:border-gray-600 " />
+                </div>
+                <div>
+                  <label htmlFor="breakEnd" className="block text-sm font-medium mb-1">Break End Time</label>
+                  <input type="time" name="breakEnd" id="breakEnd" value={manualEntryData.breakEnd} onChange={handleManualEntryChange} className="w-full p-2 border rounded-lg dark:border-gray-600 " />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="remark" className="block text-sm font-medium mb-1">Remark (Optional)</label>
+                <input type="text" name="remark" id="remark" placeholder="e.g., Manual entry by admin" value={manualEntryData.remark} onChange={handleManualEntryChange} className="w-full p-2 border rounded-lg dark:border-gray-600 " />
+              </div>
+              <div className="mt-6 flex justify-end gap-4">
+                <button type="button" onClick={() => setManualEntryModalOpen(false)} className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">Cancel</button>
+                <button type="submit" className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">Submit Attendance</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
