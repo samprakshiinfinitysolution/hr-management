@@ -117,41 +117,6 @@ export const checkIn = async (req, res) => {
   }
 };
 
-// CHECK-OUT
-// export const checkOut = async (req, res) => {
-//   try {
-//     const employeeId = req.user.id;
-//     const dateOnly = new Date(moment().tz("Asia/Kolkata").format("YYYY-MM-DD"));
-
-//     const att = await Attendance.findOne({ user: employeeId, date: dateOnly });
-//     if (!att || !att.checkIn) {
-//       return res.status(400).json({ message: "No check-in found for today" });
-//     }
-//     if (att.checkOut) {
-//       return res.status(400).json({ message: "Already checked out today" });
-//     }
-
-//     const employee = await Employee.findById(employeeId);
-//     const adminSettingsRaw = await Admin.findById(employee.createdBy).select("attendanceSettings");
-//     const settings = normalizeSettings(adminSettingsRaw?.attendanceSettings || {});
-
-//     const now = moment().tz("Asia/Kolkata");
-//     att.checkOut = now.toDate();
-//     att.logout = now.format("HH:mm");
-
-//     const diffMs = att.checkOut.getTime() - att.checkIn.getTime();
-//     att.totalHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
-
-//     att.remark = getRemark(att.login, att.logout, settings);
-//     att.status = att.remark;
-
-//     await att.save();
-//     return res.json({ message: "Checked out successfully", att });
-//   } catch (err) {
-//     console.error("checkOut error:", err);
-//     return res.status(500).json({ message: "Server error" });
-//   }
-// };
 export const checkOut = async (req, res) => {
   try {
     const employeeId = req.user.id;
@@ -411,34 +376,6 @@ export const manualAttendance = async (req, res) => {
 };
 
 // GET ALL ATTENDANCE (Admin/HR/Manager)
-// export const getAllAttendance = async (req, res) => {
-//   try {
-//     const { id: userId, role, isMainAdmin } = req.user;
-
-//     let empQuery;
-//     if (isMainAdmin) {
-//       const subAdmins = await Admin.find({ createdBy: userId }).select("_id");
-//       const adminIds = [userId, ...subAdmins.map(a => a._id)];
-//       empQuery = { createdBy: { $in: adminIds } };
-//     } else if (["hr", "manager"].includes(role)) {
-//       const creatorAdmin = await Admin.findById(req.user.createdBy);
-//       const orgAdminIds = await Admin.find({ createdBy: creatorAdmin._id }).select("_id");
-//       const allTeamIds = [creatorAdmin._id, ...orgAdminIds.map(a => a._id)];
-//       empQuery = { createdBy: { $in: allTeamIds } };
-//     } else {
-//       empQuery = { createdBy: userId };
-//     }
-//     const employeeIds = await Employee.find(empQuery).distinct("_id");
-
-//     const records = await Attendance.find({ user: { $in: employeeIds } })
-//       .populate("user", "name email department position")
-//       .sort({ date: -1 });
-
-//     res.json(records);
-//   } catch (err) {
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
 export const getAllAttendance = async (req, res) => {
   try {
     const { id: userId, role, isMainAdmin } = req.user;
@@ -513,63 +450,14 @@ export const getAttendanceSummary = async (req, res) => {
     const totalEmployees = employeeIds.length;
     const onTime = attendance.filter(a => a.status === "Present").length;
     const late = attendance.filter(a => a.status === "Late").length;
+    const halfDay = attendance.filter(a => a.status === "Half Day").length;
     const absent = totalEmployees - attendance.length;
 
-    res.json({ total: totalEmployees, onTime, late, absent });
+    res.json({ total: totalEmployees, onTime,halfDay, late, absent });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
 };
-
-// GET ATTENDANCE BY DATE
-// export const getAttendance = async (req, res) => {
-//   try {
-//     const { id: userId, role, isMainAdmin } = req.user;
-  
-//     let empQuery;
-//     if (isMainAdmin) {
-//       const subAdmins = await Admin.find({ createdBy: userId }).select("_id");
-//       const adminIds = [userId, ...subAdmins.map(a => a._id)];
-//       empQuery = { createdBy: { $in: adminIds } };
-//     } else if (["hr", "manager"].includes(role)) {
-//       const creatorAdmin = await Admin.findById(req.user.createdBy);
-//       const orgAdminIds = await Admin.find({ createdBy: creatorAdmin._id }).select("_id");
-//       const allTeamIds = [creatorAdmin._id, ...orgAdminIds.map(a => a._id)];
-//       empQuery = { createdBy: { $in: allTeamIds } };
-//     } else {
-//       empQuery = { createdBy: userId };
-//     }
-//     const employeeIds = await Employee.find(empQuery).distinct("_id");
-
-//     // date, startDate, endDate logic (timezone-aware)
-//     const { date, startDate, endDate } = req.query;
-//     let start, end;
-
-//     if (startDate && endDate) {
-//       start = moment(startDate).tz("Asia/Kolkata").startOf("day").toDate();
-//       end = moment(endDate).tz("Asia/Kolkata").endOf("day").toDate();
-//     } else if (date) {
-//       const q = moment(date).tz("Asia/Kolkata");
-//       start = q.startOf("day").toDate();
-//       end = q.endOf("day").toDate();
-//     } else {
-//       const today = moment().tz("Asia/Kolkata");
-//       start = today.startOf("day").toDate();
-//       end = today.endOf("day").toDate();
-//     }
-
-//     const attendance = await Attendance.find({
-//       user: { $in: employeeIds },
-//       date: { $gte: start, $lte: end }
-//     }).populate("user", "name email department position").sort({ date: -1 });
-
-//       return res.json(attendance);
-//     } catch (err) {
-//       console.error("getAttendance error:", err);
-//       return res.status(500).json({ message: "Server error" });
-//     }
-//   };
-// GET ATTENDANCE BY DATE
 export const getAttendance = async (req, res) => {
   try {
     const { id: userId, role, isMainAdmin } = req.user;

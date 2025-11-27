@@ -254,6 +254,7 @@ export const getAdminDashboardData = async (req, res) => {
     });
 
     const onTime = todayAttendance.filter(a => a.status === "Present").length;
+    const halfDay = todayAttendance.filter(a => a.status === "Half Day").length;
     const late = todayAttendance.filter(a => a.status === "Late" || a.status === "Late Login").length;
     const absent = totalEmployees - todayAttendance.length;
 
@@ -265,7 +266,7 @@ export const getAdminDashboardData = async (req, res) => {
 
     res.json({
       totalEmployees,
-      attendance: { total: totalEmployees, onTime, late, absent },
+      attendance: { total: totalEmployees,halfDay, onTime, late, absent },
       pendingLeaveCount,
     });
   } catch (error) {

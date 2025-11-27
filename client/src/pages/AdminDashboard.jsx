@@ -11,7 +11,7 @@ const AdminAttendanceWidget = () => {
   const [todayAttendance, setTodayAttendance] = useState(null);
   const [startBreakLoading, setStartBreakLoading] = useState(false);
   const [endBreakLoading, setEndBreakLoading] = useState(false);
-  
+
   const fetchTodayAttendance = async () => {
     try {
       const res = await API.get("/attendance/admin/me");
@@ -46,27 +46,6 @@ const AdminAttendanceWidget = () => {
       toast.error(err.response?.data?.message || "Check-out failed.");
     }
   };
-
-  // const handleLunchStart = async () => {
-  //   try {
-  //     const res = await API.post("/attendance/admin/lunch-start");
-  //     toast.success(res.data.message);
-  //     await fetchTodayAttendance(); // refresh
-  //   } catch (err) {
-  //     toast.error(err.response?.data?.message || "Failed to start lunch break");
-  //   }
-  // };
-
-  // const handleLunchEnd = async () => {
-  //   try {
-  //     const res = await API.post("/attendance/admin/lunch-end");
-  //     toast.success(res.data.message);
-  //     await fetchTodayAttendance();
-  //   } catch (err) {
-  //     toast.error(err.response?.data?.message || "Failed to end lunch break");
-  //   }
-  // };
-
   const handleBreakStart = async () => {
     if (startBreakLoading) return; // prevent duplicate clicks
     try {
@@ -146,22 +125,22 @@ const AdminAttendanceWidget = () => {
       <div className="text-sm mt-4 text-gray-500 grid grid-cols-2 gap-x-4 gap-y-1">
         {todayAttendance?.checkIn && <p>Checked In: {new Date(todayAttendance.checkIn).toLocaleTimeString()}</p>}
         {todayAttendance?.checkOut && <p>Checked Out: {new Date(todayAttendance.checkOut).toLocaleTimeString()}</p>}
-      
+
       </div>
       {todayAttendance?.breaks && todayAttendance.breaks.length > 0 && (
-  <div className="mt-4 text-sm text-gray-500">
-    <h4 className="font-semibold">Break History:</h4>
+        <div className="mt-4 text-sm text-gray-500">
+          <h4 className="font-semibold">Break History:</h4>
 
-    {todayAttendance.breaks.map((b, index) => (
-      <p key={index}>
-        Break {index + 1}: 
-        {new Date(b.start).toLocaleTimeString()}
-        {" - "}
-        {b.end ? new Date(b.end).toLocaleTimeString() : "Ongoing..."}
-      </p>
-    ))}
-  </div>
-)}
+          {todayAttendance.breaks.map((b, index) => (
+            <p key={index}>
+              Break {index + 1}:
+              {new Date(b.start).toLocaleTimeString()}
+              {" - "}
+              {b.end ? new Date(b.end).toLocaleTimeString() : "Ongoing..."}
+            </p>
+          ))}
+        </div>
+      )}
 
     </div>
   );
@@ -175,7 +154,7 @@ export default function AdminHome() {
   const [dashboard, setDashboard] = useState({
     totalEmployees: 0,
     leaveReports: 0,
-    attendance: { total: 0, onTime: 0, absent: 0, late: 0 },
+    attendance: { total: 0, onTime: 0, halfDay: 0, absent: 0, late: 0, },
   });
   const [birthdays, setBirthdays] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -193,7 +172,7 @@ export default function AdminHome() {
         console.log("Dashboard API Data:", data);
         setDashboard({
           totalEmployees: data.totalEmployees || 0,
-          attendance: data.attendance || { total: 0, onTime: 0, absent: 0, late: 0 },
+          attendance: data.attendance || { total: 0, onTime: 0, halfDay: 0, absent: 0, late: 0 },
           leaveReports: data.pendingLeaveCount || 0,
         });
         setError("");
@@ -293,8 +272,9 @@ export default function AdminHome() {
             <h3 className="text-lg font-medium mb-4">Attendance Report</h3>
 
             {/* Summary Section */}
-            <div className="grid grid-cols-4 gap-2">
-              {["total", "onTime", "absent", "late"].map((key) => (
+
+            <div className="grid grid-cols-5 gap-2">
+              {["total", "onTime", "halfDay", "absent", "late",].map((key) => (
                 <div key={key} className="text-center">
                   <p className="text-2xl font-bold">{dashboard.attendance[key]}</p>
                   <p
@@ -303,7 +283,11 @@ export default function AdminHome() {
                   >
                     {key === "onTime"
                       ? "On Time"
-                      : key.charAt(0).toUpperCase() + key.slice(1)}
+                      : key === "halfDay"
+                        ? "Half Day"
+                        : key.charAt(0).toUpperCase() + key.slice(1)
+                    }
+
                   </p>
                 </div>
               ))}
