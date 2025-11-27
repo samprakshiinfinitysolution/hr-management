@@ -44,7 +44,8 @@ export default function EmpEodReports() {
   ];
 
   // Helpers
-  const todayString = () => new Date().toISOString().split("T")[0];
+  // FIX: Use moment-timezone to get today's date in the correct timezone to prevent day-rollover issues.
+  const todayString = () => moment().tz("Asia/Kolkata").format("YYYY-MM-DD");
 
   useEffect(() => {
     const initialize = async () => {
@@ -69,7 +70,9 @@ export default function EmpEodReports() {
   const fetchMyAttendance = async () => {
     try {
       const res = await API.get("/attendance/me");
-      const arr = Array.isArray(res.data) ? res.data : [];
+      // FIX: The API now returns an object { records: [], settings: {} }.
+      // We need to access the 'records' property.
+      const arr = res.data.records || [];
       const today = todayString();
       // attendance records may have date stored as ISO or date object
       const todayRec = arr.find((r) => {
@@ -112,78 +115,78 @@ export default function EmpEodReports() {
     }
   };
   const fetchAllEodReports = async (attendance, shouldResetForm = false) => {
-    setIsLoading(true);
-    try {
-      const res = await API.get("/eod/my");
-      let reports = Array.isArray(res.data) ? res.data : [];
+  setIsLoading(true);
+  try {
+    const res = await API.get("/eod/my");
+    let reports = Array.isArray(res.data) ? res.data : [];
 
-      // Remove duplicate dates and sort desc
-      const byDate = [];
-      const seen = new Set();
-      for (const r of reports) {
-        const d = r.date?.split("T")[0] || r.date;
-        if (!seen.has(d)) {
-          seen.add(d);
-          byDate.push(r);
-        }
+    const byDate = [];
+    const seen = new Set();
+
+    for (const r of reports) {
+      const d = moment(r.date).tz("Asia/Kolkata").format("YYYY-MM-DD");
+      if (!seen.has(d)) {
+        seen.add(d);
+        byDate.push({ ...r, _dateIST: d });   // ⭐ Save IST date for reliable matching
       }
-      byDate.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-      // Ensure "today" option exists
-      const today = todayString();
-      const hasToday = byDate.some((r) => (r.date?.split("T")[0] || r.date) === today);
-      const options = [...byDate];
-      if (!hasToday) options.unshift({ _id: "today", date: today });
-
-      setAllReports(options);
-      if (reports.length > 0 && reports[0].columns) {
-        setColumns(reports[0].columns);
-      }
-
-      const todaysReport = byDate.find((r) => (r.date?.split("T")[0] || r.date) === today);
-
-      if (todaysReport) {
-        // If a report for today already exists, load it
-        // Only load if the selected date is not already today's, to avoid overwriting a just-saved form
-        if (selectedDate !== today) {
-          loadReportData(todaysReport);
-        }
-      } else if (shouldResetForm) {
-        // Otherwise, set up a fresh new form for today
-        resetFormForToday(attendance);
-      }
-    } catch (err) {
-      console.error("fetchAllEodReports:", err);
-      toast.error("Failed to load EOD list");
-    } finally {
-      setIsLoading(false);
     }
-  };
+
+    byDate.sort((a, b) => new Date(b._dateIST) - new Date(a._dateIST));
+
+    const today = todayString();
+    const hasToday = byDate.some(r => r._dateIST === today);
+
+    const list = [...byDate];
+    if (!hasToday) list.unshift({ _id: "today", _dateIST: today });
+
+    setAllReports(list);
+
+    const todaysReport = byDate.find(r => r._dateIST === today);
+
+    if (todaysReport && selectedDate !== today) {
+      loadReportData(todaysReport);
+    } else if (!todaysReport && shouldResetForm) {
+      resetFormForToday(attendance);
+    }
+  } catch (err) {
+    toast.error("Failed to load EOD list");
+  } finally {
+    setIsLoading(false);
+  }
+};
+
 
   const loadReportData = (report) => {
-    const dateOnly = report.date?.split("T")[0] || report.date;
-    const isToday = dateOnly === todayString();
-    setForm({
-      _id: report._id || null, // Store the report's ID
-      date: dateOnly,
-      reportingTime:
-        report.reportingTime ||
-        (attendanceToday // Check if attendanceToday exists first
-          ? attendanceToday.login ||
-            (attendanceToday.checkIn
-              ? moment(attendanceToday.checkIn).tz("Asia/Kolkata").format("HH:mm")
-              : "")
-          : ""), // Fallback to empty string if not available
-      name: report.name || "",
-      eodTime: report.eodTime || (isToday ? moment(nowClock).format("HH:mm") : ""),
-      project: report.project || "",
-      summary: report.summary || "",
-      nextDayPlan: report.nextDayPlan || "",
-    });
-    setRows(Array.isArray(report.rows) && report.rows.length > 0 ? report.rows : defaultRows);
-    setSelectedDate(dateOnly);
-    setIsViewOnly(!isToday); // if not today -> view-only
-  };
+  const dateOnly = report._dateIST;
+
+  const isToday = dateOnly === todayString();
+
+  setForm({
+    _id: report._id || null,
+    date: dateOnly,
+    reportingTime:
+      report.reportingTime ||
+      attendanceToday?.login ||
+      (attendanceToday?.checkIn
+        ? moment(attendanceToday.checkIn).tz("Asia/Kolkata").format("HH:mm")
+        : ""),
+    name: report.name || "",
+    eodTime: report.eodTime || (isToday ? moment(nowClock).format("HH:mm") : ""),
+    project: report.project || "",
+    summary: report.summary || "",
+    nextDayPlan: report.nextDayPlan || "",
+  });
+
+  setRows(
+    report.rows?.length > 0
+      ? JSON.parse(JSON.stringify(report.rows)) // ⭐ deep clone
+      : JSON.parse(JSON.stringify(defaultRows))
+  );
+
+  setSelectedDate(dateOnly);
+  setIsViewOnly(!isToday);
+};
+
 
   const resetFormForToday = (attendance) => {
     setForm({
@@ -206,20 +209,15 @@ export default function EmpEodReports() {
   };
 
   // When dropdown changes
-  const handleDateSelect = (e) => {
-    const date = e.target.value;
-    setSelectedDate(date);
-    // find report with same date
-    const selected = allReports.find((r) => (r.date?.split("T")[0] || r.date) === date);
-    if (selected && selected._id !== "today") {
-      // load existing report (view only if not today)
-      loadReportData(selected);
-    } else if (selected && selected._id === "today") {
-      resetFormForToday(attendanceToday);
-    } else {
-      resetFormForToday(attendanceToday);
-    }
-  };
+ const handleDateSelect = (e) => {
+  const date = e.target.value;
+  setSelectedDate(date);
+
+  const found = allReports.find(r => r._dateIST === date);
+
+  if (found && found._id !== "today") loadReportData(found);
+  else resetFormForToday(attendanceToday);
+};
 
   // Keep eodTime live while viewing/creating today's report and read-only
   useEffect(() => {
@@ -340,10 +338,10 @@ const handleSubmit = async (e) => {
         >
           {allReports.length === 0 && <option value="">No EOD found</option>}
           {allReports.map((report) => (
-            <option key={report._id || report.date} value={(report.date?.split("T")[0] || report.date)} className="text-black">
+            <option key={report._id || report.date} value={moment(report.date).tz("Asia/Kolkata").format("YYYY-MM-DD")} className="text-black">
               {report._id === "today"
-                ? `Today (${new Date(report.date).toLocaleDateString("en-IN")})`
-                : new Date(report.date).toLocaleDateString("en-IN")}
+                ? `Today (${moment(report.date).tz("Asia/Kolkata").format("DD/MM/YYYY")})`
+                : moment(report.date).tz("Asia/Kolkata").format("DD/MM/YYYY")}
             </option>
           ))}
         </select>
@@ -367,7 +365,7 @@ const handleSubmit = async (e) => {
             <input
               type="text"
               name="date"
-              value={form.date ? new Date(form.date).toLocaleDateString("en-IN") : ""}
+              value={form.date ? moment(form.date).tz("Asia/Kolkata").format("DD/MM/YYYY") : ""}
               className="w-full mt-1 p-2 border rounded-md dark:border-gray-600  "
               readOnly
             />

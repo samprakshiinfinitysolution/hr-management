@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import API from "../../utils/api";
 import { toast } from "react-hot-toast";
+import moment from "moment-timezone";
 import { X } from "lucide-react";
 
 export default function AdminEodReports() {
@@ -98,23 +99,26 @@ export default function AdminEodReports() {
   const fetchEmployeeEods = async (empId, dateToSelect) => {
     try {
       const res = await API.get(`/eod/admin?employeeId=${empId}`);
-      const reports = res.data || [];
+      const reports = (res.data || []).map(r => ({
+        ...r,
+        _dateIST: moment(r.date).tz("Asia/Kolkata").format("YYYY-MM-DD")
+      }));
+
+      reports.sort((a, b) => new Date(b._dateIST) - new Date(a._dateIST));
       setEmployeeReports(reports);
 
       if (reports.length === 0) {
         resetForm();
-        return reports;  // 💥 return important
+        return [];
       }
 
-      const selected =
-        (dateToSelect &&
-          reports.find((r) => r.date.split("T")[0] === dateToSelect)) ||
-        reports[0];
+      let selected =
+        reports.find(r => r._dateIST === dateToSelect) || reports[0];
 
-      setSelectedDate(selected.date.split("T")[0]);
+      setSelectedDate(selected._dateIST);
       loadReport(selected);
 
-      return reports;   // 💥 IMPORTANT
+      return reports;
     } catch (e) {
       toast.error("Failed to load EOD history");
       return [];
@@ -137,17 +141,17 @@ export default function AdminEodReports() {
     const date = e.target.value;
     setSelectedDate(date);
 
-    const found = employeeReports.find(
-      (r) => r.date.split("T")[0] === date
-    );
+    const found = employeeReports.find(r => r._dateIST === date);
 
     if (found) loadReport(found);
   };
 
   // Load single report
   const loadReport = (report, freshColumns) => {
+    const dateOnly = report._dateIST;
+
     setForm({
-      date: report.date?.split("T")[0] || "",
+      date: dateOnly,
       reportingTime: report.reportingTime || "",
       name: report.name || "",
       eodTime: report.eodTime || "",
@@ -156,16 +160,16 @@ export default function AdminEodReports() {
       nextDayPlan: report.nextDayPlan || "",
     });
 
-    // Use merged rows from backend (already merged)
-    if (Array.isArray(report.rows) && report.rows.length > 0) {
-      setRows(report.rows);
-    } else {
-      setRows(templateRows);
-    }
+    setRows(
+      Array.isArray(report.rows) && report.rows.length > 0
+        ? JSON.parse(JSON.stringify(report.rows))
+        : JSON.parse(JSON.stringify(templateRows))
+    );
 
-    // Always GLOBAL template columns, not report.columns
     setEditColumns(freshColumns || templateColumns);
   };
+
+
   // Reset form
   const resetForm = () => {
     setForm({
@@ -183,11 +187,8 @@ export default function AdminEodReports() {
   // Format date DD/MM/YYYY
   const formatToDDMMYYYY = (d) => {
     if (!d) return "";
-    const dt = new Date(d);
-    const dd = String(dt.getDate()).padStart(2, "0");
-    const mm = String(dt.getMonth() + 1).padStart(2, "0");
-    const yy = dt.getFullYear();
-    return `${dd}/${mm}/${yy}`;
+    // FIX: Use moment-timezone to correctly interpret the date from the server (likely UTC) and format it in the local timezone.
+    return moment(d).tz("Asia/Kolkata").format("DD/MM/YYYY");
   };
 
   // Edit row update
@@ -276,56 +277,47 @@ export default function AdminEodReports() {
   };
 
   // Save EOD
-  const saveEod = async () => {
-    try {
-      const eod = employeeReports.find(
-        (r) => new Date(r.date).toISOString().split("T")[0] === selectedDate
-      );
+ const saveEod = async () => {
+  try {
+    // FIX: Accurate IST match
+    const eod = employeeReports.find(
+      (r) => r._dateIST === selectedDate
+    );
 
-      if (!eod) return toast.error("No EOD selected");
+    if (!eod) return toast.error("No EOD selected");
 
-      // Prepare safe payload for backend
-      const payload = {
-        form: {
-          date: editForm.date,
-          reportingTime: editForm.reportingTime,
-          eodTime: editForm.eodTime,
-          project: editForm.project,
-          summary: editForm.summary,
-          nextDayPlan: editForm.nextDayPlan,
-        },
+    const payload = {
+      form: {
+        date: editForm.date,
+        reportingTime: editForm.reportingTime,
+        eodTime: editForm.eodTime,
+        project: editForm.project,
+        summary: editForm.summary,
+        nextDayPlan: editForm.nextDayPlan,
+      },
+      rows: [...editRows],
+      columns: [...editColumns],
+    };
 
-        // rows updated by admin
-        rows: [...editRows],
+    await API.put(`/eod/admin/${eod._id}`, payload);
 
-        // columns updated by admin
-        columns: [...editColumns],
-      };
+    toast.success("EOD updated successfully");
 
-      // 1️⃣ Update single EOD + global template (if changed)
-      const res = await API.put(`/eod/admin/${eod._id}`, payload);
-
-      toast.success("EOD updated successfully");
-
-      // 2️⃣ Reload template from server (updated)
-      const tpl = await fetchTemplate();
-
-      if (tpl) {
-        setTemplateColumns(tpl.columns || []);
-        setTemplateRows(tpl.rows || []);
-      }
-
-      // 3️⃣ Reload that employee's EOD reports
-      await fetchEmployeeEods(selectedEmployee, selectedDate);
-
-      // 4️⃣ Exit edit mode
-      setIsEdit(false);
-
-    } catch (err) {
-      console.error("Admin update error:", err);
-      toast.error(err.response?.data?.message || "Update failed");
+    const tpl = await fetchTemplate();
+    if (tpl) {
+      setTemplateColumns(tpl.columns || []);
+      setTemplateRows(tpl.rows || []);
     }
-  };
+
+    await fetchEmployeeEods(selectedEmployee, selectedDate);
+
+    setIsEdit(false);
+
+  } catch (err) {
+    console.error("Admin update error:", err);
+    toast.error(err.response?.data?.message || "Update failed");
+  }
+};
 
 
   const getStatusBadgeClass = (s) => {
@@ -350,8 +342,8 @@ export default function AdminEodReports() {
           <button
             onClick={() => {
               if (!isEdit) {
-                setEditForm({ ...form });
-                setEditRows([...rows]);
+                setEditForm(JSON.parse(JSON.stringify(form)));
+                setEditRows(JSON.parse(JSON.stringify(rows)));
                 // Use the columns from the currently loaded report
                 const currentReport = employeeReports.find(r => r.date.split("T")[0] === selectedDate);
                 const currentColumns = currentReport?.columns || templateColumns;
@@ -499,14 +491,14 @@ export default function AdminEodReports() {
                   {Array.from(
                     new Map(
                       employeeReports.map(rep => [
-                        rep.date.split("T")[0],
+                        moment(rep.date).tz("Asia/Kolkata").format("YYYY-MM-DD"),
                         rep
                       ])
                     ).values()
                   )
                     .sort((a, b) => new Date(b.date) - new Date(a.date))
                     .map(rep => {
-                      const dateStr = rep.date.split("T")[0];
+                      const dateStr = moment(rep.date).tz("Asia/Kolkata").format("YYYY-MM-DD");
                       return (
                         <option key={dateStr} value={dateStr} className="text-black">
                           {formatToDDMMYYYY(rep.date)}
