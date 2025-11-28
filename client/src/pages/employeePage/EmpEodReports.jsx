@@ -156,10 +156,8 @@ export default function EmpEodReports() {
   }
 };
 
-
-  const loadReportData = (report) => {
+const loadReportData = (report) => {
   const dateOnly = report._dateIST;
-
   const isToday = dateOnly === todayString();
 
   setForm({
@@ -171,22 +169,29 @@ export default function EmpEodReports() {
       (attendanceToday?.checkIn
         ? moment(attendanceToday.checkIn).tz("Asia/Kolkata").format("HH:mm")
         : ""),
+
     name: report.name || "",
-    eodTime: report.eodTime || (isToday ? moment(nowClock).format("HH:mm") : ""),
+    eodTime: isToday ? moment(nowClock).format("HH:mm") : report.eodTime || "",
     project: report.project || "",
     summary: report.summary || "",
     nextDayPlan: report.nextDayPlan || "",
   });
 
-  setRows(
-    report.rows?.length > 0
-      ? JSON.parse(JSON.stringify(report.rows)) // ⭐ deep clone
-      : JSON.parse(JSON.stringify(defaultRows))
-  );
+  // ⭐ FINAL FIX: Iterate over the defaultRows (the base structure) instead of columns.
+  // This ensures all rows from the template are always present.
+  const mergedRows = defaultRows.map((templateRow, index) => {
+    return {
+      ...templateRow,                         // Start with the base template row.
+      ...(report.rows?.[index] || {}),        // Merge saved employee data for that row, if it exists.
+    };
+  });
+
+  setRows(mergedRows);
 
   setSelectedDate(dateOnly);
   setIsViewOnly(!isToday);
 };
+
 
 
   const resetFormForToday = (attendance) => {

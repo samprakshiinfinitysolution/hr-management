@@ -155,13 +155,9 @@ export const getMyEodReports = async (req, res) => {
 
     const reports = await EodReport.find({ employee: req.user.id }).sort({ date: -1 });
 
-    const final = reports.map((r) => ({
-      ...r.toObject(),
-      rows: mergeTemplate(template, r.rows || []),
-      columns: template.columns || ["time", "task", "description", "status", "remarks"],
-    }));
-
-    res.json(final);
+    // ⭐ FINAL FIX: Return the reports exactly as they are saved in the database.
+    // Do NOT merge with the global template here. The frontend will handle defaults.
+    res.json(reports);
   } catch (err) {
     console.error("getMyEodReports:", err);
     res.status(500).json({ message: err.message });
