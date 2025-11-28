@@ -192,9 +192,9 @@ export default function EmpAttendance() {
         setHistory(prev => {
           const exists = prev.some(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date));
           if (exists) {
-            return prev.map(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date) ? normalized : r).sort((a,b)=> new Date(b.date)-new Date(a.date));
+            return prev.map(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date) ? normalized : r).sort((a, b) => new Date(b.date) - new Date(a.date));
           }
-          return [normalized, ...prev].sort((a,b)=> new Date(b.date)-new Date(a.date));
+          return [normalized, ...prev].sort((a, b) => new Date(b.date) - new Date(a.date));
         });
       } else {
         setHasLoggedInToday(true);
@@ -225,9 +225,20 @@ export default function EmpAttendance() {
       const res = await API.post("/attendance/checkout", { date: selectedDate, logout: now });
       console.log("Employee: /attendance/checkout response:", res?.data);
       const remark = getRemark(loginTime, now, attendanceSettings);
-      if (remark === "Half Day") toast.error("🟡 Half Day — checkout before 4:00 PM");
-      else if (remark === "Early Checkout") toast("⚠️ Early checkout before 5:45 PM", { icon: "🕔" });
-      else toast.success(`🕒 Checked out successfully at ${now}`);
+      // if (remark === "Half Day") toast.error("🟡 Half Day — checkout before 4:00 PM");
+      // else if (remark === "Early Checkout") toast("⚠️ Early checkout before 5:45 PM", { icon: "🕔" });
+      // else toast.success(`🕒 Checked out successfully at ${now}`);
+      if (remark === "Half Day") {
+        toast.error(`🟡 Half Day — checkout before ${attendanceSettings.halfDayCheckoutCutoff}`);
+      }
+      else if (remark === "Early Checkout") {
+        toast(`⚠️ Early Checkout — office end time is ${attendanceSettings.officeEndTime}`, {
+          icon: "🕔"
+        });
+      }
+      else {
+        toast.success(`🕒 Checked out successfully at ${now}`);
+      }
 
       const att = res?.data?.att;
       if (att) {
@@ -242,9 +253,9 @@ export default function EmpAttendance() {
         setHistory(prev => {
           const exists = prev.some(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date));
           if (exists) {
-            return prev.map(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date) ? normalized : r).sort((a,b)=> new Date(b.date)-new Date(a.date));
+            return prev.map(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date) ? normalized : r).sort((a, b) => new Date(b.date) - new Date(a.date));
           }
-          return [normalized, ...prev].sort((a,b)=> new Date(b.date)-new Date(a.date));
+          return [normalized, ...prev].sort((a, b) => new Date(b.date) - new Date(a.date));
         });
         setCheckoutTime(normalized.logout || checkoutTime);
       } else {
@@ -284,9 +295,9 @@ export default function EmpAttendance() {
         setHistory(prev => {
           const exists = prev.some(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date));
           if (exists) {
-            return prev.map(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date) ? normalized : r).sort((a,b)=> new Date(b.date)-new Date(a.date));
+            return prev.map(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date) ? normalized : r).sort((a, b) => new Date(b.date) - new Date(a.date));
           }
-          return [normalized, ...prev].sort((a,b)=> new Date(b.date)-new Date(a.date));
+          return [normalized, ...prev].sort((a, b) => new Date(b.date) - new Date(a.date));
         });
         setLoginTime(normalized.login || loginTime);
         setCheckoutTime(normalized.logout || checkoutTime);
@@ -329,9 +340,9 @@ export default function EmpAttendance() {
         setHistory(prev => {
           const exists = prev.some(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date));
           if (exists) {
-            return prev.map(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date) ? normalized : r).sort((a,b)=> new Date(b.date)-new Date(a.date));
+            return prev.map(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date) ? normalized : r).sort((a, b) => new Date(b.date) - new Date(a.date));
           }
-          return [normalized, ...prev].sort((a,b)=> new Date(b.date)-new Date(a.date));
+          return [normalized, ...prev].sort((a, b) => new Date(b.date) - new Date(a.date));
         });
         setLoginTime(normalized.login || loginTime);
         setCheckoutTime(normalized.logout || checkoutTime);
@@ -482,7 +493,7 @@ export default function EmpAttendance() {
                 <button
                   onClick={() => {
                     setShowLogoutModal(false);
-                    handleCheckout();         
+                    handleCheckout();
                   }}
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                 >
