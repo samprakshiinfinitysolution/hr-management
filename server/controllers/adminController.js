@@ -254,6 +254,7 @@ export const getAdminDashboardData = async (req, res) => {
     });
 
     const onTime = todayAttendance.filter(a => a.status === "Present").length;
+    const halfDay = todayAttendance.filter(a => a.status === "Half Day").length;
     const late = todayAttendance.filter(a => a.status === "Late" || a.status === "Late Login").length;
     const absent = totalEmployees - todayAttendance.length;
 
@@ -265,7 +266,7 @@ export const getAdminDashboardData = async (req, res) => {
 
     res.json({
       totalEmployees,
-      attendance: { total: totalEmployees, onTime, late, absent },
+      attendance: { total: totalEmployees,halfDay, onTime, late, absent },
       pendingLeaveCount,
     });
   } catch (error) {
@@ -301,14 +302,32 @@ export const getAllAdmins = async (req, res) => {
  */
 export const getBirthdays = async (req, res) => {
   try {
+    const { id: userId, role, isMainAdmin, createdBy } = req.user;
+
+    let adminIds = [];
+
+    if (isMainAdmin) {
+      const subAdmins = await Admin.find({ createdBy: userId }).select("_id");
+      adminIds = [userId, ...subAdmins.map(a => a._id)];
+    }
+
+    else if (["hr", "manager"].includes(role)) {
+      const mainAdminId = createdBy; 
+      const orgAdminIds = await Admin.find({ createdBy: mainAdminId }).select("_id");
+      adminIds = [mainAdminId, ...orgAdminIds.map(a => a._id)];
+    }
+
+    else {
+      adminIds = [userId];
+    }
+
+    const employees = await Employee.find({ createdBy: { $in: adminIds } });
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const employees = await Employee.find();
-
     const birthdays = employees.filter((emp) => {
       if (!emp.birthday) return false;
-
       const bday = new Date(emp.birthday);
       return (
         bday.getDate() === today.getDate() &&
@@ -317,6 +336,7 @@ export const getBirthdays = async (req, res) => {
     });
 
     res.json(birthdays);
+
   } catch (error) {
     console.error("Birthday fetch error:", error);
     res.status(500).json({
@@ -325,6 +345,7 @@ export const getBirthdays = async (req, res) => {
     });
   }
 };
+
 
 
 /**
@@ -460,6 +481,7 @@ export const updateAdminSettings = async (req, res) => {
       halfDayLoginCutoff: payload.halfDayLoginCutoff, // Use the standardized name
       halfDayCheckoutCutoff: payload.halfDayCheckoutCutoff ?? payload.half_day_checkout_cutoff,
       autoCheckoutTime: payload.autoCheckoutTime ?? payload.auto_checkout_time,
+      breakDurationMinutes: payload.breakDurationMinutes !== undefined ? Number(payload.breakDurationMinutes) : undefined,
     };
 
     const admin = await Admin.findById(req.user.id);

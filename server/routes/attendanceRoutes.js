@@ -11,10 +11,11 @@ import {
   adminCheckIn,
   adminCheckOut,
   getSubAdminAttendance,
-  adminLunchStart,
-  adminLunchEnd,
-  lunchStart,
-  lunchEnd,
+  adminBreakStart,
+  adminBreakEnd,
+  startBreak,
+  endBreak,
+  manualAttendance,
 } from "../controllers/attendanceController.js";
 
 const router = express.Router();
@@ -28,6 +29,7 @@ router.get("/me", verifyToken, employeeOnly, getMyAttendance);
 router.get("/all", verifyToken, allowAdminHrManager, getAllAttendance);
 router.get("/summary", verifyToken, allowAdminHrManager, getAttendanceSummary);
 router.get("/", verifyToken, allowAdminHrManager, getAttendance);
+router.post("/manual", verifyToken, allowAdminHrManager, manualAttendance);
 
 // New Routes for Admin/HR/Manager Attendance
 router.post("/admin/checkin", verifyToken, allowAdminHrManager, adminCheckIn);
@@ -36,11 +38,11 @@ router.get("/admin/me", verifyToken, allowAdminHrManager, getMyAttendance); // F
 router.get("/admin/all", verifyToken, adminOnly, getSubAdminAttendance);
 
 // Employee Lunch
-router.post("/lunch-start", verifyToken, employeeOnly, lunchStart);
-router.post("/lunch-end", verifyToken, employeeOnly, lunchEnd);
+router.post("/start-break", verifyToken, employeeOnly, startBreak);
+router.post("/end-break", verifyToken, employeeOnly, endBreak);
 
 // Admin/HR/Manager Lunch
-router.post("/admin/lunch-start", verifyToken, allowAdminHrManager, adminLunchStart);
-router.post("/admin/lunch-end", verifyToken, allowAdminHrManager, adminLunchEnd);
+router.post("/admin/break-start", verifyToken, allowAdminHrManager, adminBreakStart);
+router.post("/admin/break-end", verifyToken, allowAdminHrManager, adminBreakEnd);
 
 export default router;

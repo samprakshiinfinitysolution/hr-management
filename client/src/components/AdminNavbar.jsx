@@ -6,6 +6,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { toggleDarkMode } from "../features/auth/settingsSlice";
 import API from "../utils/api";
+import { socket } from "../socket/socket";
 import toast from "react-hot-toast";
 
 export default function AdminNavbar({ toggleSidebar }) {
@@ -21,8 +22,35 @@ export default function AdminNavbar({ toggleSidebar }) {
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
+
+    // Listen for server-pushed notifications via socket.io
+    const handleSocketNotification = (notif) => {
+      try {
+        setNotifications((prev) => {
+          if (!notif || !notif._id) return prev;
+          const exists = prev.find((n) => String(n._id) === String(notif._id));
+          if (exists) return [notif, ...prev.filter((n) => String(n._id) !== String(notif._id))];
+          return [notif, ...prev];
+        });
+      } catch (e) {
+        console.error("Error handling socket notification:", e);
+      }
+    };
+
+    socket?.on("notification", handleSocketNotification);
+
+    // Fallback: when user comes back to the tab, refresh notifications
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchNotifications();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      socket?.off("notification", handleSocketNotification);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []);
 
   useEffect(() => {

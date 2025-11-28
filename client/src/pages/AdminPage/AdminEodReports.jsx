@@ -2,6 +2,9 @@
 import React, { useState, useEffect } from "react";
 import API from "../../utils/api";
 import { toast } from "react-hot-toast";
+import moment from "moment-timezone";
+import { X, Download } from "lucide-react";
+import * as XLSX from "xlsx-js-style";
 
 export default function AdminEodReports() {
   const [form, setForm] = useState({
@@ -17,67 +20,139 @@ export default function AdminEodReports() {
   const [rows, setRows] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState("");
-  const [employeeReports, setEmployeeReports] = useState([]); // all EODs of selected employee
+  const [employeeReports, setEmployeeReports] = useState([]);
   const [selectedDate, setSelectedDate] = useState("");
 
+  // EDIT MODE
+  const [isEdit, setIsEdit] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+  const [editRows, setEditRows] = useState([]);
+  const [modalDelete, setModalDelete] = useState({ open: false, index: null });
+  const [modalDeleteColumn, setModalDeleteColumn] = useState({ open: false, column: null });
+  // TEMPLATE (GLOBAL)
+  const [templateColumns, setTemplateColumns] = useState([
+    "time",
+    "task",
+    "description",
+    "status",
+    "remarks",
+  ]);
+  const [templateRows, setTemplateRows] = useState([]);
+
+  // COLUMNS USED IN TABLE
+  const [editColumns, setEditColumns] = useState([]);
+
+  // Deduplicate Columns
+  const normalizeColumns = (cols = []) => {
+    const seen = new Set();
+    const out = [];
+    for (let c of cols || []) {
+      if (!c) continue;
+      const key = c.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(c);
+      }
+    }
+    return out;
+  };
+
+  // On load
   useEffect(() => {
     fetchEmployees();
+    fetchTemplate();
   }, []);
 
-  // ✅ Fetch all employees for dropdown
+  // Load Template
+  const fetchTemplate = async () => {
+    try {
+      const res = await API.get("/eod/eod-template");
+      const tpl = res.data || {};
+
+      const cols = normalizeColumns(
+        Array.isArray(tpl.columns) && tpl.columns.length > 0
+          ? tpl.columns
+          : ["time", "task", "description", "status", "remarks"]
+      );
+
+      setTemplateColumns(cols);
+      setTemplateRows(tpl.rows || []);
+
+      return tpl;   // 💥 IMPORTANT
+    } catch (e) {
+      console.warn("Template load failed");
+      return null;   // 💥 without this await fails
+    }
+  };
+
+
+  // Load Employees
   const fetchEmployees = async () => {
     try {
       const res = await API.get("/admin/employees");
-      setEmployees(Array.isArray(res.data) ? res.data : []);
-    } catch (err) {
+      setEmployees(res.data || []);
+    } catch {
       toast.error("Failed to load employees");
     }
   };
 
-  // ✅ Fetch all EODs for selected employee
-  const fetchEmployeeEods = async (employeeId) => {
-    if (!employeeId) return;
+  // Load EOD History of Employee
+  const fetchEmployeeEods = async (empId, dateToSelect) => {
     try {
-      const res = await API.get(`/eod/admin?employeeId=${employeeId}`);
-      const reports = Array.isArray(res.data) ? res.data : [];
+      const res = await API.get(`/eod/admin?employeeId=${empId}`);
+      const reports = (res.data || []).map(r => ({
+        ...r,
+        _dateIST: moment(r.date).tz("Asia/Kolkata").format("YYYY-MM-DD")
+      }));
+
+      reports.sort((a, b) => new Date(b._dateIST) - new Date(a._dateIST));
       setEmployeeReports(reports);
 
-      if (reports.length > 0) {
-        const latest = reports[0];
-        setSelectedDate(latest.date?.split("T")[0]);
-        loadReport(latest);
-      } else {
+      if (reports.length === 0) {
         resetForm();
+        return [];
       }
-    } catch (err) {
-      toast.error("Failed to load EOD reports");
+
+      let selected =
+        reports.find(r => r._dateIST === dateToSelect) || reports[0];
+
+      setSelectedDate(selected._dateIST);
+      loadReport(selected);
+
+      return reports;
+    } catch (e) {
+      toast.error("Failed to load EOD history");
+      return [];
     }
   };
 
-  // ✅ Handle Employee dropdown change
+
+  // Employee selection change
   const handleEmployeeChange = (e) => {
-    const empId = e.target.value;
-    setSelectedEmployee(empId);
-    setSelectedDate("");
+    const id = e.target.value;
+    setSelectedEmployee(id);
     setEmployeeReports([]);
+    setSelectedDate("");
     resetForm();
-    fetchEmployeeEods(empId);
+    if (id) fetchEmployeeEods(id);
   };
 
-  // ✅ Handle Date selection
+  // Date selection change
   const handleDateChange = (e) => {
     const date = e.target.value;
     setSelectedDate(date);
-    const selectedReport = employeeReports.find(
-      (r) => r.date?.split("T")[0] === date
-    );
-    if (selectedReport) loadReport(selectedReport);
+
+    const found = employeeReports.find(r => r._dateIST === date);
+
+    if (found) loadReport(found);
   };
 
-  // ✅ Load data into form and table
-  const loadReport = (report) => {
+  // Load single report
+  const loadReport = (report, freshColumns) => {
+    const dateOnly = report._dateIST;
+
     setForm({
-      date: report.date?.split("T")[0] || "",
+      date: dateOnly,
       reportingTime: report.reportingTime || "",
       name: report.name || "",
       eodTime: report.eodTime || "",
@@ -85,9 +160,125 @@ export default function AdminEodReports() {
       summary: report.summary || "",
       nextDayPlan: report.nextDayPlan || "",
     });
-    setRows(report.rows || []);
+
+    setRows(
+      Array.isArray(report.rows) && report.rows.length > 0
+        ? JSON.parse(JSON.stringify(report.rows))
+        : JSON.parse(JSON.stringify(templateRows))
+    );
+
+    setEditColumns(freshColumns || templateColumns);
   };
 
+  const handleDownload = () => {
+    if (!selectedDate || !form.date) {
+      toast.error("Please select a report to download.");
+      return;
+    }
+
+    // 1. Create a new workbook
+    const wb = XLSX.utils.book_new();
+
+    // Find employee name
+    const employee = employees.find(e => e._id === selectedEmployee);
+    const employeeName = employee ? employee.name : 'Unknown';
+
+    // 2. Prepare data for the worksheet
+    const headerData = [
+      ["Employee Name", employeeName],
+      ["Date", moment(form.date).tz("Asia/Kolkata").format("DD/MM/YYYY")],
+      ["Reporting Time", form.reportingTime],
+      ["EOD Time", form.eodTime],
+      ["Project", form.project],
+    ];
+
+    const currentColumns = isEdit ? editColumns : (employeeReports.find(r => r._dateIST === selectedDate)?.columns || templateColumns);
+    const tableHeader = currentColumns.map(col => col.charAt(0).toUpperCase() + col.slice(1));
+    const tableRows = rows.map(row => currentColumns.map(col => row[col] || ""));
+
+    const summaryData = [
+      [], // Spacer
+      ["Summary / Notes"],
+      [form.summary],
+      [], // Spacer
+      ["Next Day Plan"],
+      [form.nextDayPlan],
+    ];
+
+    const finalData = [
+      ...headerData,
+      [], // Spacer
+      tableHeader,
+      ...tableRows,
+      ...summaryData,
+    ];
+
+    // 3. Create worksheet from the data
+    const ws = XLSX.utils.aoa_to_sheet(finalData);
+
+    // --- START: Add Styling (Borders, Header, Wrap Text) ---
+    const range = XLSX.utils.decode_range(ws["!ref"]);
+    const thinBorderStyle = {
+      top: { style: "thin", color: { auto: 1 } },
+      bottom: { style: "thin", color: { auto: 1 } },
+      left: { style: "thin", color: { auto: 1 } },
+      right: { style: "thin", color: { auto: 1 } },
+    };
+    const headerStyle = {
+      font: { bold: true },
+      fill: { fgColor: { rgb: "D3D3D3" } }, // Light Gray
+      border: thinBorderStyle,
+      alignment: { wrapText: true, vertical: "top" },
+    };
+    const tableHeaderRowIndex = headerData.length + 1;
+
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
+        let cell = ws[cell_ref];
+        if (!cell) { cell = { v: "" }; ws[cell_ref] = cell; }
+        if (!cell.s) cell.s = {};
+
+        if (R === tableHeaderRowIndex) {
+          cell.s = headerStyle;
+        } else {
+          cell.s.border = thinBorderStyle;
+        }
+
+        if (!cell.s.alignment) cell.s.alignment = {};
+        cell.s.alignment.wrapText = true;
+        cell.s.alignment.vertical = "top";
+      }
+    }
+
+    // --- Set fixed column widths ---
+    const colWidths = currentColumns.map(col => {
+      if (col.toLowerCase() === 'description') return { wch: 40 };
+      if (col.toLowerCase() === 'time') return { wch: 15 };
+      return { wch: 25 };
+    });
+    ws['!cols'] = colWidths;
+
+    // --- Merge Cells for Summary and Next Day Plan ---
+    const summaryContentRowIndex = headerData.length + 1 + 1 + tableRows.length + 1 + 1;
+    const nextDayPlanContentRowIndex = summaryContentRowIndex + 2 + 1;
+    if (!ws['!merges']) ws['!merges'] = [];
+    ws['!merges'].push(
+      { s: { r: summaryContentRowIndex, c: 0 }, e: { r: summaryContentRowIndex, c: currentColumns.length - 1 } },
+      { s: { r: nextDayPlanContentRowIndex, c: 0 }, e: { r: nextDayPlanContentRowIndex, c: currentColumns.length - 1 } }
+    );
+    // --- END: Styling ---
+
+    // 4. Add worksheet to the workbook
+    XLSX.utils.book_append_sheet(wb, ws, "EOD Report");
+
+    // 5. Trigger the download
+    const fileName = `EOD_${employeeName}_${form.date}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  };
+
+
+  // Reset form
   const resetForm = () => {
     setForm({
       date: "",
@@ -100,209 +291,651 @@ export default function AdminEodReports() {
     });
     setRows([]);
   };
-  const getStatusBadge = (status) => {
-    switch (status) {
+
+  // Format date DD/MM/YYYY
+  const formatToDDMMYYYY = (d) => {
+    if (!d) return "";
+    // FIX: Use moment-timezone to correctly interpret the date from the server (likely UTC) and format it in the local timezone.
+    return moment(d).tz("Asia/Kolkata").format("DD/MM/YYYY");
+  };
+
+  // Edit row update
+  const updateRow = (index, field, value) => {
+    const copy = [...editRows];
+    copy[index][field] = value;
+    setEditRows(copy);
+  };
+  // const handleDeleteColumn = async (col) => {
+  //   // 1️⃣ UI update immediately
+  //   const filtered = editColumns.filter((c) => c !== col);
+  //   setEditColumns(filtered);
+  //   setTemplateColumns(filtered);
+
+  //   const newRows = editRows.map((r) => {
+  //     const copy = { ...r };
+  //     delete copy[col];
+  //     return copy;
+  //   });
+  //   setEditRows(newRows);
+
+  //   // 2️⃣ Update Global Template Immediately
+  //   try {
+  //     await API.put("/eod/eod-template", { // Corrected endpoint
+  //       columns: filtered,
+  //       rows: templateRows,
+  //     });
+
+  //     // 3️⃣ Re-fetch Template → instant UI update
+  //     await fetchTemplate();
+
+  //     toast.success("Column removed");
+  //   } catch (err) {
+  //     toast.error("Template update failed");
+  //   }
+  // };
+
+
+
+  // Delete row
+  const handleDeleteColumn = async (col) => {
+    // Remove from template & UI
+    const filtered = editColumns.filter((c) => c !== col);
+
+    setEditColumns(filtered);
+    setTemplateColumns(filtered);
+
+    // Delete from current edit rows
+    const newRows = editRows.map((r) => {
+      const copy = { ...r };
+      delete copy[col];
+      return copy;
+    });
+
+    setEditRows(newRows);
+
+    // Also fix templateRows so mismatch na ho
+    const newTemplateRows = templateRows.map((r) => {
+      const copy = { ...r };
+      delete copy[col];
+      return copy;
+    });
+    setTemplateRows(newTemplateRows);
+
+    try {
+      await API.put("/eod/eod-template", {
+        columns: filtered,
+        rows: newTemplateRows,
+      });
+
+      await fetchTemplate();
+      toast.success("Column removed");
+    } catch (err) {
+      toast.error("Template update failed");
+    }
+  };
+
+  const deleteRow = (index) => {
+    if (isEdit) {
+      const newRows = editRows.filter((_, i) => i !== index);
+      setEditRows(newRows);
+    } else {
+      const newRows = rows.filter((_, i) => i !== index);
+      setRows(newRows);
+    }
+  };
+
+  // Save EOD
+ const saveEod = async () => {
+  try {
+    // FIX: Accurate IST match
+    const eod = employeeReports.find(
+      (r) => r._dateIST === selectedDate
+    );
+
+    if (!eod) return toast.error("No EOD selected");
+
+    const payload = {
+      form: {
+        date: editForm.date,
+        reportingTime: editForm.reportingTime,
+        eodTime: editForm.eodTime,
+        project: editForm.project,
+        summary: editForm.summary,
+        nextDayPlan: editForm.nextDayPlan,
+      },
+      rows: [...editRows],
+      columns: [...editColumns],
+    };
+
+    await API.put(`/eod/admin/${eod._id}`, payload);
+
+    toast.success("EOD updated successfully");
+
+    const tpl = await fetchTemplate();
+    if (tpl) {
+      setTemplateColumns(tpl.columns || []);
+      setTemplateRows(tpl.rows || []);
+    }
+
+    await fetchEmployeeEods(selectedEmployee, selectedDate);
+
+    setIsEdit(false);
+
+  } catch (err) {
+    console.error("Admin update error:", err);
+    toast.error(err.response?.data?.message || "Update failed");
+  }
+};
+
+
+  const getStatusBadgeClass = (s) => {
+    switch (s) {
       case "Done":
-        return "bg-green-200 text-green-800 px-2 py-1 rounded font-semibold";
+        return "bg-green-200 text-green-800";
       case "Pending":
-        return "bg-yellow-200 text-yellow-800 px-2 py-1 rounded font-semibold";
+        return "bg-yellow-200 text-yellow-800";
       case "Working":
-        return "bg-blue-200 text-blue-800 px-2 py-1 rounded font-semibold";
+        return "bg-blue-200 text-blue-800";
       default:
-        return "bg-gray-200 text-gray-700 px-2 py-1 rounded";
+        return "bg-gray-200 text-gray-700";
     }
   };
 
   return (
-    <div className="min-h-screen p-6 transition">
-      <h1 className="text-3xl font-bold mb-6 text-center">
-        📝 End of Day (EOD) Report
-      </h1>
+    <>
+      <div className="min-h-screen p-6">
+        <h1 className="text-3xl font-bold mb-6 text-center">📝 EOD Reports</h1>
 
-      <div className="shadow-lg rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-        {/* HEADER SECTION */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          {/* Date Display */}
-          <div>
-            <label className="font-semibold text-sm">Date</label>
-            <input
-              type="date"
-              name="date"
-              value={form.date}
-              readOnly
-              className="w-full mt-1 p-2 border rounded-md dark:border-gray-600"
-            />
-          </div>
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={!selectedDate}
+            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download size={18} />
+            Download EOD
+          </button>
 
-          {/* Reporting Time */}
-          <div>
-            <label className="font-semibold text-sm">Reporting Time</label>
-            <input
-              type="time"
-              name="reportingTime"
-              value={form.reportingTime}
-              readOnly
-              className="w-full mt-1 p-2 border rounded-md dark:border-gray-600"
-            />
-          </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              if (!isEdit) {
+                setEditForm(JSON.parse(JSON.stringify(form)));
+                setEditRows(JSON.parse(JSON.stringify(rows)));
+                // Use the columns from the currently loaded report
+                const currentReport = employeeReports.find(r => r.date.split("T")[0] === selectedDate);
+                const currentColumns = currentReport?.columns || templateColumns;
+                setEditColumns(currentColumns);
 
-          {/* 🔽 Employee Dropdown */}
-          <div>
-            <label className="font-semibold text-sm ">Employee Name</label>
-            <select
-              name="name"
-              value={selectedEmployee}
-              onChange={handleEmployeeChange}
-              className="w-full mt-1 p-2 border rounded-md dark:border-gray-600 "
+                setIsEdit(true);
+              } else {
+                setIsEdit(false);
+                setEditForm(null);
+                setEditRows([]);
+              }
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded"
+          >
+            {isEdit ? "Cancel Edit" : "Edit EOD"}
+          </button>
+
+          {isEdit && (
+            <button
+              onClick={() => {
+                const col = prompt("Enter column name:");
+                if (!col) return;
+
+                if (editColumns.includes(col) || templateColumns.includes(col))
+                  return toast.error("Column already exists");
+
+                // 1️⃣ Update editColumns
+                const newCols = [...editColumns, col];
+                setEditColumns(newCols);
+
+                // 2️⃣ Update templateColumns (so UI updates instantly)
+                setTemplateColumns(newCols);
+
+                // 3️⃣ Add new field to every row
+                setEditRows(
+                  editRows.map((r) => ({
+                    ...r,
+                    [col]: "",
+                  }))
+                );
+              }}
+              className="bg-green-600 text-white px-3 py-1 rounded"
             >
-              <option value="" className="text-black">Select Employee</option>
-              {employees.map((emp) => (
-                <option key={emp._id} value={emp._id} className="text-black">
-                  {emp.name} - {emp.position}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* EOD Time */}
-          <div>
-            <label className="font-semibold text-sm">EOD Time</label>
-            <input
-              type="time"
-              name="eodTime"
-              value={form.eodTime}
-              readOnly
-              className="w-full mt-1 p-2 border rounded-md dark:border-gray-600"
-            />
-          </div>
-
-          {/* 🔽 Date Dropdown (for this employee) */}
-          {employeeReports.length > 0 && (
-            <div className="md:col-span-2">
-              <label className="font-semibold text-sm">Select Date</label>
-              <select
-                value={selectedDate}
-                onChange={handleDateChange}
-                className="w-full mt-1 p-2 border rounded-md dark:border-gray-600"
-              >
-                {(() => {
-                  // ✅ Filter unique dates and sort (latest first)
-                  const uniqueDates = [];
-                  const seen = new Set();
-
-                  employeeReports.forEach((r) => {
-                    const d = r.date?.split("T")[0];
-                    if (!seen.has(d)) {
-                      seen.add(d);
-                      uniqueDates.push(r);
-                    }
-                  });
-
-                  uniqueDates.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-                  return uniqueDates.map((r) => (
-                    <option
-                      key={r._id}
-                      value={r.date?.split("T")[0]}
-                      className="text-black"
-                    >
-                      {new Date(r.date).toLocaleDateString("en-IN")}
-                    </option>
-                  ));
-                })()}
-              </select>
-            </div>
+              + Add Column
+            </button>
           )}
 
+        </div> {/* This closes the inner button group */}
 
-          {/* Project */}
-          <div className="md:col-span-2">
-            <label className="font-semibold text-sm">Project</label>
-            <input
-              type="text"
-              name="project"
-              value={form.project}
-              readOnly
-              className="w-full mt-1 p-2 border rounded-md dark:border-gray-600"
-            />
-          </div>
-        </div>
-
-        {/* TABLE SECTION */}
-        <div className="overflow-x-auto mb-6">
-          <table className="w-full border dark:border-gray-600">
-            <thead>
-              <tr>
-                <th className="border p-2 text-sm">Time</th>
-                <th className="border p-2 text-sm">Task / Project</th>
-                <th className="border p-2 text-sm">Description of Work</th>
-                <th className="border p-2 text-sm">Status</th>
-                <th className="border p-2 text-sm">Remarks</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan="5"
-                    className="text-center py-4 text-gray-500 dark:text-gray-400"
-                  >
-                    No EOD data available
-                  </td>
-                </tr>
+      </div> {/* This closes the outer button group */}
+        <div className="shadow-lg rounded-lg p-6 border border-gray-300 dark:border-gray-700">
+          {/* HEADER */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div>
+              <label className="text-sm font-semibold">Date</label>
+              {isEdit ? (
+                <input
+                  type="date"
+                  className="w-full p-2 border rounded"
+                  value={editForm?.date || ""}
+                  onChange={(e) =>
+                    setEditForm({ ...(editForm || {}), date: e.target.value })
+                  }
+                />
               ) : (
-                rows.map((row, i) => (
-                  <tr key={i}>
-                    <td className="border p-2 text-sm font-semibold">{row.time}</td>
+                <input
+                  type="date"
+                  readOnly
+                  className="w-full p-2 border rounded"
+                  value={form.date}
+                />
+              )}
+            </div>
 
-                    <td className="border p-2 text-sm">
-                      {row.task || "-"}
-                    </td>
+            <div>
+              <label className="text-sm font-semibold">Reporting Time</label>
+              {isEdit ? (
+                <input
+                  type="time"
+                  className="w-full p-2 border rounded"
+                  value={editForm?.reportingTime || ""}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...(editForm || {}),
+                      reportingTime: e.target.value,
+                    })
+                  }
+                />
+              ) : (
+                <input
+                  type="time"
+                  readOnly
+                  className="w-full p-2 border rounded"
+                  value={form.reportingTime}
+                />
+              )}
+            </div>
 
-                    <td className="border p-2 text-sm">
-                      {row.description || "-"}
-                    </td>
+            <div>
+              <label className="text-sm font-semibold">Employee</label>
+              <select
+                value={selectedEmployee}
+                onChange={handleEmployeeChange}
+                className="w-full p-2 border rounded"
+              >
+                <option value="" className="text-black">Select Employee</option>
+                {employees.map((emp) => (
+                  <option key={emp._id} value={emp._id} className="text-black">
+                    {emp.name} - {emp.position}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                    <td className="border p-2 text-sm">
-                      <span className={getStatusBadge(row.status)}>
-                        {row.status || "—"}
-                      </span>
-                    </td>
+            <div>
+              <label className="text-sm font-semibold">EOD Time</label>
+              {isEdit ? (
+                <input
+                  type="time"
+                  className="w-full p-2 border rounded"
+                  value={editForm?.eodTime || ""}
+                  onChange={(e) =>
+                    setEditForm({ ...(editForm || {}), eodTime: e.target.value })
+                  }
+                />
+              ) : (
+                <input
+                  type="time"
+                  readOnly
+                  className="w-full p-2 border rounded"
+                  value={form.eodTime}
+                />
+              )}
+            </div>
 
-                    <td className="border p-2 text-sm">
-                      {row.remarks || "-"}
+            {/* SELECT DATE DROPDOWN */}
+            {employeeReports.length > 0 && (
+              <div className="md:col-span-2">
+                <label className="text-sm font-semibold">Select Date</label>
+
+                <select
+                  value={selectedDate}
+                  onChange={handleDateChange}
+                  className="w-full p-2 border rounded"
+                >
+                  {Array.from(
+                    new Map(
+                      employeeReports.map(rep => [
+                        moment(rep.date).tz("Asia/Kolkata").format("YYYY-MM-DD"),
+                        rep
+                      ])
+                    ).values()
+                  )
+                    .sort((a, b) => new Date(b.date) - new Date(a.date))
+                    .map(rep => {
+                      const dateStr = moment(rep.date).tz("Asia/Kolkata").format("YYYY-MM-DD");
+                      return (
+                        <option key={dateStr} value={dateStr} className="text-black">
+                          {formatToDDMMYYYY(rep.date)}
+                        </option>
+                      );
+                    })}
+                </select>
+              </div>
+            )}
+
+
+            <div className="md:col-span-2">
+              <label className="text-sm font-semibold">Project</label>
+              {isEdit ? (
+                <input
+                  className="w-full p-2 border rounded"
+                  value={editForm?.project || ""}
+                  onChange={(e) =>
+                    setEditForm({ ...(editForm || {}), project: e.target.value })
+                  }
+                />
+              ) : (
+                <input
+                  readOnly
+                  className="w-full p-2 border rounded"
+                  value={form.project}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* TABLE */}
+          <div className="overflow-x-auto mb-6">
+            <table className="w-full border">
+              <thead>
+                <tr>
+                  {editColumns.map((col) => (
+                    <th key={col} className="border p-2 relative">
+                      {col}
+
+                      {isEdit && (
+                        <button
+                          onClick={() => setModalDeleteColumn({ open: true, column: col })}
+                          type="button"
+                          className="
+    ml-2 px-2 py-0.5 
+    border border-red-400 
+    text-red-600 
+    rounded-md  
+    hover:bg-red-50  
+    hover:border-red-500  
+    hover:text-red-700 
+    transition-all duration-150  
+    text-xs font-bold"
+                        >
+                          X
+                        </button>
+
+                      )}
+                    </th>
+                  ))}
+
+                  <th className="border p-2">Action</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {rows.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={editColumns.length + 1}
+                      className="text-center p-4 text-gray-500"
+                    >
+                      No rows
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
+                )}
 
-          </table>
-        </div>
+                {/* EDIT MODE */}
+                {isEdit
+                  ? editRows.map((row, i) => (
+                    <tr key={i}>
+                      {editColumns.map((col) => (
+                        <td key={col} className="border p-2">
+                          {col === "status" ? (
+                            <select
+                              value={row[col] ?? ""}
+                              onChange={(e) =>
+                                updateRow(i, col, e.target.value)
+                              }
+                              className="w-full border rounded p-1"
+                            >
+                              <option>Done</option>
+                              <option>Pending</option>
+                              <option>Working</option>
+                            </select>
+                          ) : (
+                            <input
+                              value={row[col] ?? ""}
+                              onChange={(e) =>
+                                updateRow(i, col, e.target.value)
+                              }
+                              className="w-full border rounded p-1"
+                            />
+                          )}
+                        </td>
+                      ))}
 
-        {/* SUMMARY SECTION */}
-        <div className="mb-6">
-          <label className="font-semibold text-sm block mb-2">
-            Summary / Notes
-          </label>
-          <textarea
-            name="summary"
-            value={form.summary}
-            readOnly
-            rows={3}
-            className="w-full p-3 border rounded-md dark:border-gray-600"
-          />
-        </div>
-        <div className="mb-6">
-          <label className="font-semibold text-sm block mb-2">Next Day Plan</label>
-          <textarea
-            value={form.nextDayPlan || "—"}
-            readOnly
-            rows={3}
-            className="w-full p-3 border rounded-md dark:border-gray-600 "
-          />
+                      <td className="border p-2 text-center">
+                        <button
+                          onClick={() => setModalDelete({ open: true, index: i })}
+                          className="text-sm text-red-600 font-semibold px-3 py-1 rounded border border-red-200 hover:bg-red-50 hover:border-red-400 transition"
+                        >
+                          Delete
+                        </button>
+
+                      </td>
+                    </tr>
+                  ))
+                  : rows.map((row, i) => (
+                    <tr key={i}>
+                      {editColumns.map((col) => (
+                        <td key={col} className="border p-2">
+                          {col === "status" ? (
+                            <span className={getStatusBadgeClass(row.status)}>
+                              {row.status || "—"}
+                            </span>
+                          ) : (
+                            row[col] ?? "-"
+                          )}
+                        </td>
+                      ))}
+
+                      <td className="border p-2 text-center">—</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+
+            {/* ADD ROW BUTTON */}
+            {isEdit && (
+              <button
+                onClick={() =>
+                  setEditRows([
+                    ...editRows,
+                    {
+                      time: "",
+                      task: "",
+                      description: "",
+                      status: "",
+                      remarks: "",
+                    },
+                  ])
+                }
+                className="mt-3 bg-green-600 text-white px-3 py-2 rounded"
+              >
+                + Add Row
+              </button>
+            )}
+
+            {/* COLUMN DELETE MODAL */}
+            {modalDeleteColumn.open && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="rounded-lg p-6 max-w-md w-full bg-white text-black dark:bg-gray-800 dark:text-white shadow-xl">
+
+                  {/* Header */}
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold">Confirm Column Deletion</h2>
+                    <button
+                      onClick={() =>
+                        setModalDeleteColumn({ open: false, column: null })
+                      }
+                      className="hover:text-gray-700 dark:hover:text-gray-300"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  {/* Message */}
+                  <p className="mb-6 text-gray-700 dark:text-gray-300">
+                    Are you sure you want to delete column{" "}
+                    <span className="font-bold text-red-600">
+                      {modalDeleteColumn.column}
+                    </span>
+                    ? This action cannot be undone.
+                  </p>
+
+                  {/* Buttons */}
+                  <div className="flex justify-end gap-4">
+                    <button
+                      onClick={() =>
+                        setModalDeleteColumn({ open: false, column: null })
+                      }
+                      className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500"
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        handleDeleteColumn(modalDeleteColumn.column);
+                        setModalDeleteColumn({ open: false, column: null });
+                      }}
+                      className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ROW DELETE MODAL */}
+            {modalDelete.open && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="rounded-lg p-6 max-w-md w-full bg-white text-black dark:bg-gray-800 dark:text-white shadow-xl">
+
+                  {/* Header */}
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold">Delete Row?</h2>
+                    <button
+                      onClick={() => setModalDelete({ open: false, index: null })}
+                      className="hover:text-gray-700 dark:hover:text-gray-300"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  {/* Message */}
+                  <p className="mb-6 text-gray-700 dark:text-gray-300">
+                    Are you sure you want to delete this row?
+                  </p>
+
+                  {/* Buttons */}
+                  <div className="flex justify-end gap-4">
+                    <button
+                      onClick={() => setModalDelete({ open: false, index: null })}
+                      className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500"
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        deleteRow(modalDelete.index);
+                        setModalDelete({ open: false, index: null });
+                      }}
+                      className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+
+
+            {/* SAVE BUTTON */}
+            {isEdit && (
+              <button
+                onClick={saveEod}
+                className="mt-4 bg-blue-700 text-white px-4 py-2 rounded"
+              >
+                Save Changes
+              </button>
+            )}
+          </div>
+
+          {/* SUMMARY */}
+          <div className="mb-4">
+            <label className="font-semibold text-sm">Summary</label>
+            {isEdit ? (
+              <textarea
+                className="w-full p-3 border rounded"
+                value={editForm?.summary || ""}
+                onChange={(e) =>
+                  setEditForm({
+                    ...(editForm || {}),
+                    summary: e.target.value,
+                  })
+                }
+              />
+            ) : (
+              <textarea
+                readOnly
+                className="w-full p-3 border rounded "
+                value={form.summary}
+              />
+            )}
+          </div>
+
+          {/* NEXT DAY PLAN */}
+          <div className="mb-4">
+            <label className="font-semibold text-sm">Next Day Plan</label>
+            {isEdit ? (
+              <textarea
+                className="w-full p-3 border rounded"
+                value={editForm?.nextDayPlan || ""}
+                onChange={(e) =>
+                  setEditForm({
+                    ...(editForm || {}),
+                    nextDayPlan: e.target.value,
+                  })
+                }
+              />
+            ) : (
+              <textarea
+                readOnly
+                className="w-full p-3 border rounded "
+                value={form.nextDayPlan}
+              />
+            )}
+          </div>
+
         </div>
       </div>
-    </div>
-  );
-}
+    </>
+  )
+};

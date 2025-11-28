@@ -39,13 +39,18 @@ export default function EmpAttendance() {
 
   const [loginTime, setLoginTime] = useState(null);
   const [checkoutTime, setCheckoutTime] = useState(null);
-  const [lunchStartTime, setLunchStartTime] = useState(null);
-  const [lunchEndTime, setLunchEndTime] = useState(null);
   const [selectedDate, setSelectedDate] = useState(getLocalDate());
   const [history, setHistory] = useState([]);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [hasLoggedInToday, setHasLoggedInToday] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [breaks, setBreaks] = useState([]);
+  const [activeBreak, setActiveBreak] = useState(false);
+  const [attendanceSettings, setAttendanceSettings] = useState({});
+  const [startBreakLoading, setStartBreakLoading] = useState(false);
+  const [endBreakLoading, setEndBreakLoading] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   const navigate = useNavigate();
   const { user, token } = useSelector((state) => state.auth);
@@ -69,14 +74,13 @@ export default function EmpAttendance() {
   const fetchHistory = async () => {
     try {
       const res = await API.get("/attendance/me");
-      const arr = Array.isArray(res.data) ? res.data : [];
+      const { records = [], settings = {} } = res.data;
+      setAttendanceSettings(settings);
 
-      const normalized = arr.map((r) => ({
+      const normalized = records.map((r) => ({
         ...r,
         date: r.date ? r.date : r.attendanceDate ? r.attendanceDate : null,
         login: r.checkIn ? new Date(r.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
-        lunchStart: r.lunchStartTime ? new Date(r.lunchStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
-        lunchEnd: r.lunchEndTime ? new Date(r.lunchEndTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
         logout: r.logout || r.checkOut || null,
       }));
 
@@ -91,15 +95,16 @@ export default function EmpAttendance() {
       if (todayRec) {
         setLoginTime(todayRec.login || null);
         setCheckoutTime(todayRec.logout || null);
-        setLunchStartTime(todayRec.lunchStart || null);
-        setLunchEndTime(todayRec.lunchEnd || null);
         setHasLoggedInToday(!!todayRec.login);
+        setBreaks(todayRec.breaks || []);
+        const currentBreak = (todayRec.breaks || []).find(b => b.start && !b.end);
+        setActiveBreak(!!currentBreak);
       } else {
         setLoginTime(null);
         setCheckoutTime(null);
         setHasLoggedInToday(false);
-        setLunchStartTime(null);
-        setLunchEndTime(null);
+        setBreaks([]);
+        setActiveBreak(false);
       }
     } catch (err) {
       console.error("fetchHistory error:", err);
@@ -107,16 +112,40 @@ export default function EmpAttendance() {
     }
   };
 
-  const getRemark = (login, logout) => {
+  // Dynamic remark logic based on admin settings
+  const getRemark = (login, logout, settings) => {
     if (!login || !logout) return "Incomplete";
-    const [loginHour, loginMin] = login.split(":").map(Number);
-    const [logoutHour, logoutMin] = logout.split(":").map(Number);
-    const loginMins = loginHour * 60 + loginMin;
-    const logoutMins = logoutHour * 60 + logoutMin;
-    if (loginMins > 10 * 60 + 10) return "Late Login"; // After 10:10 AM
-    if (logoutMins < 16 * 60) return "Half Day";
-    if (logoutMins < 17 * 60 + 45) return "Early Checkout";
-    return "Present";
+
+    const toMins = (hhmm) => {
+      if (!hhmm) return 0;
+      const [h, m] = String(hhmm).split(":").map(Number);
+      return h * 60 + m;
+    };
+
+    const loginMins = toMins(login);
+    const logoutMins = toMins(logout);
+
+    // Use default values if settings are not available
+    const officeStart = toMins(settings.officeStartTime || "10:00");
+    const lateGrace = Number(settings.lateGraceMinutes || 15);
+    const halfDayLoginCutoff = toMins(settings.halfDayLoginCutoff || "11:00");
+
+    const halfDayCheckoutCutoff = toMins(settings.halfDayCheckoutCutoff || "17:00");
+    const officeEnd = toMins(settings.officeEndTime || "18:00");
+
+    // LOGIN LOGIC
+    if (loginMins > halfDayLoginCutoff) return "Half Day";
+    if (loginMins > officeStart + lateGrace) return "Late Login";
+
+    // LOGOUT LOGIC
+    if (logoutMins < halfDayCheckoutCutoff) return "Half Day";
+    if (logoutMins < officeEnd) return "Early Checkout";
+
+    // If status was already set to Half Day on login, keep it.
+    const todayRec = history.find(r => toLocalDateStr(r.date) === selectedDate);
+    if (todayRec && todayRec.status === 'Half Day') return 'Half Day';
+
+    return "Present"; // Default if no other conditions met
   };
 
   const handleLogin = async () => {
@@ -124,35 +153,60 @@ export default function EmpAttendance() {
       toast.error("Can only mark attendance for today");
       return;
     }
-
     if (hasLoggedInToday) {
       toast("✅ Already logged in today! No API call made.");
       return;
     }
 
+    if (loginLoading) return;
     try {
+      setLoginLoading(true);
       const now = new Date();
       const absentTime = new Date();
-      absentTime.setHours(13, 30, 0, 0); // 1:30 PM
+      // absentTime.setHours(13, 30, 0, 0); // 1:30 PM
 
-      if (now > absentTime) {
-        toast.error("Cannot check-in after 1:30 PM. You will be marked absent.");
-        return;
-      }
+      // if (now > absentTime) {
+      //   toast.error("Cannot check-in after 1:30 PM. You will be marked absent.");
+      //   return;
+      // }
 
       const timeStr = get24HourTime();
       setLoginTime(timeStr);
 
-      await API.post("/attendance/checkin", { date: selectedDate, login: timeStr });
+      console.log("Employee: calling /attendance/checkin");
+      const res = await API.post("/attendance/checkin", { date: selectedDate, login: timeStr });
+      console.log("Employee: /attendance/checkin response:", res?.data);
       toast.success(`✅ Logged in successfully at ${timeStr}`);
-      setHasLoggedInToday(true);
 
-      await fetchHistory();
+      const att = res?.data?.att;
+      if (att) {
+        const normalized = {
+          ...att,
+          date: att.date || att.attendanceDate || null,
+          login: att.checkIn ? new Date(att.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : timeStr,
+          logout: att.logout || att.checkOut || null,
+        };
+        setHasLoggedInToday(true);
+        setBreaks(att.breaks || []);
+        setActiveBreak((att.breaks || []).some(b => b.start && !b.end));
+        setHistory(prev => {
+          const exists = prev.some(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date));
+          if (exists) {
+            return prev.map(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date) ? normalized : r).sort((a,b)=> new Date(b.date)-new Date(a.date));
+          }
+          return [normalized, ...prev].sort((a,b)=> new Date(b.date)-new Date(a.date));
+        });
+      } else {
+        setHasLoggedInToday(true);
+        await fetchHistory();
+      }
     } catch (err) {
       console.error(err);
-      toast.error(err.message || "Failed to mark login");
+      toast.error(err.message || err.response?.data?.message || "Failed to mark login");
       setLoginTime(null);
       setHasLoggedInToday(false);
+    } finally {
+      setLoginLoading(false);
     }
   };
 
@@ -161,65 +215,137 @@ export default function EmpAttendance() {
       toast.error("Can only mark attendance for today");
       return;
     }
+    if (checkoutLoading) return;
     try {
+      setCheckoutLoading(true);
       const now = get24HourTime();
       setCheckoutTime(now);
 
-      await API.post("/attendance/checkout", { date: selectedDate, logout: now });
-      const remark = getRemark(loginTime, now);
+      console.log("Employee: calling /attendance/checkout");
+      const res = await API.post("/attendance/checkout", { date: selectedDate, logout: now });
+      console.log("Employee: /attendance/checkout response:", res?.data);
+      const remark = getRemark(loginTime, now, attendanceSettings);
       if (remark === "Half Day") toast.error("🟡 Half Day — checkout before 4:00 PM");
       else if (remark === "Early Checkout") toast("⚠️ Early checkout before 5:45 PM", { icon: "🕔" });
       else toast.success(`🕒 Checked out successfully at ${now}`);
 
-      setHistory((prev) => {
-        const todayRecordExists = prev.some(r => toLocalDateStr(r.date) === selectedDate);
-        const newHistory = todayRecordExists
-          ? prev.map(r => toLocalDateStr(r.date) === selectedDate ? { ...r, logout: now } : r)
-          : [{ date: selectedDate, login: loginTime, logout: now }, ...prev];
-        return newHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
-      });
-
-      await fetchHistory();
+      const att = res?.data?.att;
+      if (att) {
+        const normalized = {
+          ...att,
+          date: att.date || att.attendanceDate || null,
+          login: att.checkIn ? new Date(att.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : loginTime,
+          logout: att.logout || att.checkOut || now,
+        };
+        setBreaks(att.breaks || []);
+        setActiveBreak((att.breaks || []).some(b => b.start && !b.end));
+        setHistory(prev => {
+          const exists = prev.some(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date));
+          if (exists) {
+            return prev.map(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date) ? normalized : r).sort((a,b)=> new Date(b.date)-new Date(a.date));
+          }
+          return [normalized, ...prev].sort((a,b)=> new Date(b.date)-new Date(a.date));
+        });
+        setCheckoutTime(normalized.logout || checkoutTime);
+      } else {
+        await fetchHistory();
+      }
     } catch (err) {
       console.error(err);
       toast.error(err.message || "Failed to mark checkout");
+    } finally {
+      setCheckoutLoading(false);
     }
   };
 
-  const handleLunchStart = async () => {
+  const handleStartBreak = async () => {
     if (selectedDate !== getLocalDate()) {
-      toast.error("Can only mark lunch break for today");
+      toast.error("Can only start a break for today");
       return;
     }
+    if (startBreakLoading) return; // prevent duplicate clicks
     try {
-      const timeStr = get24HourTime();
-      await API.post("/attendance/lunch-start", { date: selectedDate, time: timeStr });
-      toast.success(`🍱 Lunch break started at ${timeStr}`);
-      setLunchStartTime(timeStr);
-      await fetchHistory();
+      setStartBreakLoading(true);
+      console.log("Employee: calling /attendance/start-break");
+      const res = await API.post("/attendance/start-break");
+      console.log("Employee: /attendance/start-break response:", res?.data);
+      toast.success(`🍱 Break started!`);
+      // Update local state from server response to avoid extra GET
+      const att = res?.data?.att;
+      if (att) {
+        const normalized = {
+          ...att,
+          date: att.date || att.attendanceDate || null,
+          login: att.checkIn ? new Date(att.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
+          logout: att.logout || att.checkOut || null,
+        };
+        setBreaks(att.breaks || []);
+        setActiveBreak((att.breaks || []).some(b => b.start && !b.end));
+        setHistory(prev => {
+          const exists = prev.some(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date));
+          if (exists) {
+            return prev.map(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date) ? normalized : r).sort((a,b)=> new Date(b.date)-new Date(a.date));
+          }
+          return [normalized, ...prev].sort((a,b)=> new Date(b.date)-new Date(a.date));
+        });
+        setLoginTime(normalized.login || loginTime);
+        setCheckoutTime(normalized.logout || checkoutTime);
+        setHasLoggedInToday(!!normalized.login || hasLoggedInToday);
+      } else {
+        // fallback: mark active and refetch history
+        setActiveBreak(true);
+        await fetchHistory();
+      }
     } catch (err) {
       console.error(err);
-      toast.error(err.response?.data?.message || "Failed to start lunch break");
+      toast.error(err.response?.data?.message || "Failed to start break");
+    } finally {
+      setStartBreakLoading(false);
     }
   };
 
-  const handleLunchEnd = async () => {
+  const handleEndBreak = async () => {
     if (selectedDate !== getLocalDate()) {
-      toast.error("Can only mark back to work for today");
+      toast.error("Can only end a break for today");
       return;
     }
+    if (endBreakLoading) return; // prevent duplicate clicks
     try {
-      const timeStr = get24HourTime();
-      await API.post("/attendance/lunch-end", { date: selectedDate, time: timeStr });
-      toast.success(`👍 Back to work at ${timeStr}`);
-      setLunchEndTime(timeStr);
-      await fetchHistory();
+      setEndBreakLoading(true);
+      console.log("Employee: calling /attendance/end-break");
+      const res = await API.post("/attendance/end-break");
+      console.log("Employee: /attendance/end-break response:", res?.data);
+      toast.success(`👍 Back to work!`);
+      const att = res?.data?.att;
+      if (att) {
+        const normalized = {
+          ...att,
+          date: att.date || att.attendanceDate || null,
+          login: att.checkIn ? new Date(att.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
+          logout: att.logout || att.checkOut || null,
+        };
+        setBreaks(att.breaks || []);
+        setActiveBreak((att.breaks || []).some(b => b.start && !b.end));
+        setHistory(prev => {
+          const exists = prev.some(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date));
+          if (exists) {
+            return prev.map(r => toLocalDateStr(r.date) === toLocalDateStr(normalized.date) ? normalized : r).sort((a,b)=> new Date(b.date)-new Date(a.date));
+          }
+          return [normalized, ...prev].sort((a,b)=> new Date(b.date)-new Date(a.date));
+        });
+        setLoginTime(normalized.login || loginTime);
+        setCheckoutTime(normalized.logout || checkoutTime);
+      } else {
+        setActiveBreak(false);
+        await fetchHistory();
+      }
     } catch (err) {
       console.error(err);
-      toast.error(err.response?.data?.message || "Failed to end lunch break");
+      toast.error(err.response?.data?.message || "Failed to end break");
+    } finally {
+      setEndBreakLoading(false);
     }
   };
-
 
   return (
     <div className="flex justify-center items-start w-full">
@@ -273,24 +399,24 @@ export default function EmpAttendance() {
         {/* Lunch Break Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
           <button
-            onClick={handleLunchStart}
-            disabled={!loginTime || !!lunchStartTime || !!checkoutTime}
-            className={`flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-semibold text-white transition ${!loginTime || !!lunchStartTime || !!checkoutTime
+            onClick={handleStartBreak}
+            disabled={!loginTime || activeBreak || !!checkoutTime}
+            className={`flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-semibold text-white transition ${!loginTime || activeBreak || !!checkoutTime
               ? "bg-gray-400 dark:bg-gray-700 cursor-not-allowed"
               : "bg-yellow-500 hover:bg-yellow-600"
               }`}
           >
-            <Coffee size={20} /> {lunchStartTime ? "On Break" : "On Lunch Break"}
+            <Coffee size={20} /> {activeBreak ? "On Break" : "Start Break"}
           </button>
           <button
-            onClick={handleLunchEnd}
-            disabled={!lunchStartTime || !!lunchEndTime || !!checkoutTime}
-            className={`flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-semibold text-white transition ${!lunchStartTime || !!lunchEndTime || !!checkoutTime
+            onClick={handleEndBreak}
+            disabled={!loginTime || !activeBreak || !!checkoutTime}
+            className={`flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-lg font-semibold text-white transition ${!loginTime || !activeBreak || !!checkoutTime
               ? "bg-gray-400 dark:bg-gray-700 cursor-not-allowed"
               : "bg-cyan-500 hover:bg-cyan-600"
               }`}
           >
-            <Briefcase size={20} /> {lunchEndTime ? "Resumed" : "Back to Work"}
+            <Briefcase size={20} /> {"End Break"}
           </button>
         </div>
 
@@ -312,16 +438,17 @@ export default function EmpAttendance() {
                 {checkoutTime || "-"}
               </span>
             </p>
-            <p>
-              <span className="font-semibold">Lunch Start:</span>{" "}
-              <span className={lunchStartTime ? "text-yellow-600 font-medium" : ""}>
-                {lunchStartTime || "-"}
-              </span>
-            </p>
-            <p>
-              <span className="font-semibold">Back to Work:</span>{" "}
-              <span className={lunchEndTime ? "text-cyan-600 font-medium" : ""}>{lunchEndTime || "-"}</span>
-            </p>
+            {breaks.map((b, i) => (
+              <p key={i}>
+                <span className="font-semibold">Break {i + 1}:</span>{" "}
+                <span className="text-yellow-600 font-medium">
+                  {b.start ? new Date(b.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
+                  {' - '}
+                  {b.end ? new Date(b.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (activeBreak && i === breaks.length - 1 ? 'In Progress' : '-')}
+                </span>
+              </p>
+            ))}
+
           </div>
         </div>
 
@@ -381,7 +508,7 @@ export default function EmpAttendance() {
               ) : (
                 <div className="space-y-2 overflow-x-auto">
                   {history.slice(0, 10).map((r, i) => {
-                    const remark = getRemark(r.login, r.logout);
+                    const remark = getRemark(r.login, r.logout, attendanceSettings);
                     const color =
                       remark === "Late Login"
                         ? "text-red-500"

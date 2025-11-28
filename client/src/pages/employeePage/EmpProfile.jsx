@@ -159,7 +159,8 @@ export default function EmployeeProfile() {
         <ProfileCard icon={<BookOpen />} title="Education" fields={[["highestQualification", "Highest Qualification"], ["yearOfPassing", "Year of Passing"]]} editing={editing} form={form} employee={profile} handleChange={handleChange} />
         <ProfileCard icon={<Home />} title="Address" fields={[["address", "Address"]]} editing={editing} form={form} employee={profile} handleChange={handleChange} />
         <ProfileCard icon={<Banknote />} title="Bank Details" fields={[["accountHolder", "Account Holder"], ["bankName", "Bank Name"], ["accountNumber", "Account Number"], ["ifsc", "IFSC Code"]]} editing={editing} form={form} employee={profile} handleChange={handleChange} />
-        <ProfileCard icon={<FileText />} title="Identification" fields={[["idType", "ID Type"], ["idNumber", "ID Number"]]} editing={editing} form={form} employee={profile} handleChange={handleChange} />
+        <ProfileCard icon={<FileText />} title="Identification" fields={[["idType", "ID Type"], ["idNumber", "ID Number"]]} editing={editing} form={form} employee={profile} handleChange={handleChange} 
+        />
         <ProfileCard icon={<Phone />} title="Emergency Contact" fields={[["emergencyName", "Emergency Name"], ["emergencyRelation", "Relation"], ["emergencyNumber", "Emergency Number"]]} editing={editing} form={form} employee={profile} handleChange={handleChange} />
         <ProfileCard icon={<Calendar />} title="Additional Info" fields={[["birthday", "Birthday", "date"], ["department", "Department"], ["jobType", "Job Type"]]} editing={editing} form={form} employee={profile} handleChange={handleChange} />
       </div>
@@ -176,20 +177,36 @@ function ProfileCard({ icon, title, fields, editing, form, employee, handleChang
       </div>
       <div className="space-y-3">
         {fields.map(([key, label, type = "text"]) => (
-          editing ? (
+          editing ? ( // In Edit Mode
             <div key={key} className="space-y-1">
-              <label className="text-xs font-medium  block mb-1">{label}</label>
-              <input
-                type={type}
-                name={key}
-                value={type === "date" && form[key] ? new Date(form[key]).toISOString().split('T')[0] : form[key] || ""}
-                onChange={handleChange}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder={`Enter ${label}`}
-                disabled={key === 'email'} // Prevent email from being edited
-              />
+              <label className="text-xs font-medium block mb-1">{label}</label>
+              {key === 'idType' ? (
+                <select
+                  name="idType"
+                  value={form.idType || ""}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select ID Type</option>
+                  <option value="Aadhaar Card">Aadhaar Card</option>
+                  <option value="Voter ID">Voter ID</option>
+                  <option value="PAN Card">PAN Card</option>
+                  <option value="Driving License">Driving License</option>
+                  <option value="Other">Other</option>
+                </select>
+              ) : (
+                <input
+                  type={type}
+                  name={key}
+                  value={type === "date" && form[key] ? new Date(form[key]).toISOString().split('T')[0] : form[key] || ""}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder={`Enter ${label}`}
+                  disabled={key === 'email'} // Prevent email from being edited
+                />
+              )}
             </div>
-          ) : (
+          ) : ( // In View Mode
             <div key={key} className="py-2 border-b border-gray-100 last:border-b-0">
               <span className=" text-sm block">{label}:</span>
               <span className="font-medium ">

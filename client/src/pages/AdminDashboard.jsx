@@ -9,6 +9,8 @@ import toast from "react-hot-toast";
 
 const AdminAttendanceWidget = () => {
   const [todayAttendance, setTodayAttendance] = useState(null);
+  const [startBreakLoading, setStartBreakLoading] = useState(false);
+  const [endBreakLoading, setEndBreakLoading] = useState(false);
 
   const fetchTodayAttendance = async () => {
     try {
@@ -44,24 +46,39 @@ const AdminAttendanceWidget = () => {
       toast.error(err.response?.data?.message || "Check-out failed.");
     }
   };
-
-  const handleLunchStart = async () => {
+  const handleBreakStart = async () => {
+    if (startBreakLoading) return; // prevent duplicate clicks
     try {
-      const res = await API.post("/attendance/admin/lunch-start");
+      setStartBreakLoading(true);
+      console.log("Admin: calling /attendance/admin/break-start");
+      const res = await API.post("/attendance/admin/break-start");
+      console.log("Admin: /attendance/admin/break-start response:", res?.data);
       toast.success(res.data.message);
-      await fetchTodayAttendance(); // refresh
+      // Update local state directly from response to avoid extra GET request
+      if (res?.data?.att) setTodayAttendance(res.data.att);
     } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to start lunch break");
+      console.error("admin break-start error:", err);
+      toast.error(err.response?.data?.message || "Failed to start break");
+    } finally {
+      setStartBreakLoading(false);
     }
   };
 
-  const handleLunchEnd = async () => {
+  const handleBreakEnd = async () => {
+    if (endBreakLoading) return; // prevent duplicate clicks
     try {
-      const res = await API.post("/attendance/admin/lunch-end");
+      setEndBreakLoading(true);
+      console.log("Admin: calling /attendance/admin/break-end");
+      const res = await API.post("/attendance/admin/break-end");
+      console.log("Admin: /attendance/admin/break-end response:", res?.data);
       toast.success(res.data.message);
-      await fetchTodayAttendance();
+      // Update local state directly from response to avoid extra GET request
+      if (res?.data?.att) setTodayAttendance(res.data.att);
     } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to end lunch break");
+      console.error("admin break-end error:", err);
+      toast.error(err.response?.data?.message || "Failed to end break");
+    } finally {
+      setEndBreakLoading(false);
     }
   };
 
@@ -86,21 +103,45 @@ const AdminAttendanceWidget = () => {
             </button>
           </div>
           <div className="flex gap-4 justify-center mt-4">
-            <button onClick={handleLunchStart} disabled={!todayAttendance?.checkIn || !!todayAttendance?.lunchStartTime || !!todayAttendance?.checkOut} className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:bg-gray-400 disabled:cursor-not-allowed">
-              <Coffee size={18} /> On Lunch
+            <button
+              onClick={handleBreakStart}
+              disabled={!todayAttendance?.checkIn || todayAttendance?.breaks?.some(b => !b.end)}
+              className="bg-yellow-500 text-white px-4 py-2 rounded-lg"
+            >
+              Start Break
             </button>
-            <button onClick={handleLunchEnd} disabled={!todayAttendance?.lunchStartTime || !!todayAttendance?.lunchEndTime || !!todayAttendance?.checkOut} className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 disabled:bg-gray-400 disabled:cursor-not-allowed">
-              <Briefcase size={18} /> Back to Work
+
+            <button
+              onClick={handleBreakEnd}
+              disabled={!todayAttendance?.breaks?.some(b => !b.end)}
+              className="bg-blue-500 text-white px-4 py-2 rounded-lg"
+            >
+              End Break
             </button>
+
           </div>
         </>
       )}
       <div className="text-sm mt-4 text-gray-500 grid grid-cols-2 gap-x-4 gap-y-1">
         {todayAttendance?.checkIn && <p>Checked In: {new Date(todayAttendance.checkIn).toLocaleTimeString()}</p>}
         {todayAttendance?.checkOut && <p>Checked Out: {new Date(todayAttendance.checkOut).toLocaleTimeString()}</p>}
-        {todayAttendance?.lunchStartTime && <p>Lunch Start: {new Date(todayAttendance.lunchStartTime).toLocaleTimeString()}</p>}
-        {todayAttendance?.lunchEndTime && <p>Lunch End: {new Date(todayAttendance.lunchEndTime).toLocaleTimeString()}</p>}
+
       </div>
+      {todayAttendance?.breaks && todayAttendance.breaks.length > 0 && (
+        <div className="mt-4 text-sm text-gray-500">
+          <h4 className="font-semibold">Break History:</h4>
+
+          {todayAttendance.breaks.map((b, index) => (
+            <p key={index}>
+              Break {index + 1}:
+              {new Date(b.start).toLocaleTimeString()}
+              {" - "}
+              {b.end ? new Date(b.end).toLocaleTimeString() : "Ongoing..."}
+            </p>
+          ))}
+        </div>
+      )}
+
     </div>
   );
 };
@@ -113,7 +154,7 @@ export default function AdminHome() {
   const [dashboard, setDashboard] = useState({
     totalEmployees: 0,
     leaveReports: 0,
-    attendance: { total: 0, onTime: 0, absent: 0, late: 0 },
+    attendance: { total: 0, onTime: 0, halfDay: 0, absent: 0, late: 0, },
   });
   const [birthdays, setBirthdays] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -131,7 +172,7 @@ export default function AdminHome() {
         console.log("Dashboard API Data:", data);
         setDashboard({
           totalEmployees: data.totalEmployees || 0,
-          attendance: data.attendance || { total: 0, onTime: 0, absent: 0, late: 0 },
+          attendance: data.attendance || { total: 0, onTime: 0, halfDay: 0, absent: 0, late: 0 },
           leaveReports: data.pendingLeaveCount || 0,
         });
         setError("");
@@ -231,8 +272,9 @@ export default function AdminHome() {
             <h3 className="text-lg font-medium mb-4">Attendance Report</h3>
 
             {/* Summary Section */}
-            <div className="grid grid-cols-4 gap-2">
-              {["total", "onTime", "absent", "late"].map((key) => (
+
+            <div className="grid grid-cols-5 gap-2">
+              {["total", "onTime", "halfDay", "absent", "late",].map((key) => (
                 <div key={key} className="text-center">
                   <p className="text-2xl font-bold">{dashboard.attendance[key]}</p>
                   <p
@@ -241,7 +283,11 @@ export default function AdminHome() {
                   >
                     {key === "onTime"
                       ? "On Time"
-                      : key.charAt(0).toUpperCase() + key.slice(1)}
+                      : key === "halfDay"
+                        ? "Half Day"
+                        : key.charAt(0).toUpperCase() + key.slice(1)
+                    }
+
                   </p>
                 </div>
               ))}
@@ -265,8 +311,8 @@ export default function AdminHome() {
           </div>
           {/* Birthday Events */}
           <div className={`col-span-full p-6 rounded-2xl shadow-lg ${isDarkMode
-              ? "bg-gray-800 text-white"
-              : "bg-gradient-to-br from-pink-50 to-yellow-50 text-gray-900"
+            ? "bg-gray-800 text-white"
+            : "bg-gradient-to-br from-pink-50 to-yellow-50 text-gray-900"
             }`}>
             <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
               <Cake /> Birthday Events
