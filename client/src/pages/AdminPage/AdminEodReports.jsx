@@ -3,7 +3,8 @@ import React, { useState, useEffect } from "react";
 import API from "../../utils/api";
 import { toast } from "react-hot-toast";
 import moment from "moment-timezone";
-import { X } from "lucide-react";
+import { X, Download } from "lucide-react";
+import * as XLSX from "xlsx-js-style";
 
 export default function AdminEodReports() {
   const [form, setForm] = useState({
@@ -167,6 +168,113 @@ export default function AdminEodReports() {
     );
 
     setEditColumns(freshColumns || templateColumns);
+  };
+
+  const handleDownload = () => {
+    if (!selectedDate || !form.date) {
+      toast.error("Please select a report to download.");
+      return;
+    }
+
+    // 1. Create a new workbook
+    const wb = XLSX.utils.book_new();
+
+    // Find employee name
+    const employee = employees.find(e => e._id === selectedEmployee);
+    const employeeName = employee ? employee.name : 'Unknown';
+
+    // 2. Prepare data for the worksheet
+    const headerData = [
+      ["Employee Name", employeeName],
+      ["Date", moment(form.date).tz("Asia/Kolkata").format("DD/MM/YYYY")],
+      ["Reporting Time", form.reportingTime],
+      ["EOD Time", form.eodTime],
+      ["Project", form.project],
+    ];
+
+    const currentColumns = isEdit ? editColumns : (employeeReports.find(r => r._dateIST === selectedDate)?.columns || templateColumns);
+    const tableHeader = currentColumns.map(col => col.charAt(0).toUpperCase() + col.slice(1));
+    const tableRows = rows.map(row => currentColumns.map(col => row[col] || ""));
+
+    const summaryData = [
+      [], // Spacer
+      ["Summary / Notes"],
+      [form.summary],
+      [], // Spacer
+      ["Next Day Plan"],
+      [form.nextDayPlan],
+    ];
+
+    const finalData = [
+      ...headerData,
+      [], // Spacer
+      tableHeader,
+      ...tableRows,
+      ...summaryData,
+    ];
+
+    // 3. Create worksheet from the data
+    const ws = XLSX.utils.aoa_to_sheet(finalData);
+
+    // --- START: Add Styling (Borders, Header, Wrap Text) ---
+    const range = XLSX.utils.decode_range(ws["!ref"]);
+    const thinBorderStyle = {
+      top: { style: "thin", color: { auto: 1 } },
+      bottom: { style: "thin", color: { auto: 1 } },
+      left: { style: "thin", color: { auto: 1 } },
+      right: { style: "thin", color: { auto: 1 } },
+    };
+    const headerStyle = {
+      font: { bold: true },
+      fill: { fgColor: { rgb: "D3D3D3" } }, // Light Gray
+      border: thinBorderStyle,
+      alignment: { wrapText: true, vertical: "top" },
+    };
+    const tableHeaderRowIndex = headerData.length + 1;
+
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
+        let cell = ws[cell_ref];
+        if (!cell) { cell = { v: "" }; ws[cell_ref] = cell; }
+        if (!cell.s) cell.s = {};
+
+        if (R === tableHeaderRowIndex) {
+          cell.s = headerStyle;
+        } else {
+          cell.s.border = thinBorderStyle;
+        }
+
+        if (!cell.s.alignment) cell.s.alignment = {};
+        cell.s.alignment.wrapText = true;
+        cell.s.alignment.vertical = "top";
+      }
+    }
+
+    // --- Set fixed column widths ---
+    const colWidths = currentColumns.map(col => {
+      if (col.toLowerCase() === 'description') return { wch: 40 };
+      if (col.toLowerCase() === 'time') return { wch: 15 };
+      return { wch: 25 };
+    });
+    ws['!cols'] = colWidths;
+
+    // --- Merge Cells for Summary and Next Day Plan ---
+    const summaryContentRowIndex = headerData.length + 1 + 1 + tableRows.length + 1 + 1;
+    const nextDayPlanContentRowIndex = summaryContentRowIndex + 2 + 1;
+    if (!ws['!merges']) ws['!merges'] = [];
+    ws['!merges'].push(
+      { s: { r: summaryContentRowIndex, c: 0 }, e: { r: summaryContentRowIndex, c: currentColumns.length - 1 } },
+      { s: { r: nextDayPlanContentRowIndex, c: 0 }, e: { r: nextDayPlanContentRowIndex, c: currentColumns.length - 1 } }
+    );
+    // --- END: Styling ---
+
+    // 4. Add worksheet to the workbook
+    XLSX.utils.book_append_sheet(wb, ws, "EOD Report");
+
+    // 5. Trigger the download
+    const fileName = `EOD_${employeeName}_${form.date}.xlsx`;
+    XLSX.writeFile(wb, fileName);
   };
 
 
@@ -338,6 +446,17 @@ export default function AdminEodReports() {
       <div className="min-h-screen p-6">
         <h1 className="text-3xl font-bold mb-6 text-center">📝 EOD Reports</h1>
 
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={!selectedDate}
+            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download size={18} />
+            Download EOD
+          </button>
+
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
@@ -391,8 +510,9 @@ export default function AdminEodReports() {
             </button>
           )}
 
-        </div>
+        </div> {/* This closes the inner button group */}
 
+      </div> {/* This closes the outer button group */}
         <div className="shadow-lg rounded-lg p-6 border border-gray-300 dark:border-gray-700">
           {/* HEADER */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

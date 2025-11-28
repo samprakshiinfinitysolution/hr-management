@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import API from "../../utils/api";
-import { Close, Email, Phone, Visibility, CalendarMonth, People, CheckCircle, Cancel, AccessTime, EditCalendar } from "@mui/icons-material"; // Assuming you use these
+import { Close, Email, Phone, Visibility, CalendarMonth, People, CheckCircle, Cancel, AccessTime, EditCalendar } from "@mui/icons-material";
 import { toast, Toaster } from "react-hot-toast";
 import dayjs from "dayjs";
 
@@ -15,24 +15,24 @@ const AttendanceTable = ({ records, loading, userType, onRowClick }) => {
   );
 
   return (
-    <div className="overflow-x-auto ">
-      <table className="w-full">
-        <thead >
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[1024px]"> {/* Min-width for horizontal scroll on small screens */}
+        <thead>
           <tr className="bg-gray-300 text-black">
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider rounded-tl-lg">Employee</th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">{userType === 'employee' ? 'Department' : 'Role'}</th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Check-In</th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Check-Out</th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Total Time</th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Total Break</th>
-            <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider rounded-tr-lg">Actions</th>
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider rounded-tl-lg">Employee</th>
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">{userType === 'employee' ? 'Department' : 'Role'}</th>
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Check-In</th>
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Check-Out</th>
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Total Time</th>
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Total Break</th>
+            <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider rounded-tr-lg">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
           {records.map((record) => (
             <tr key={record.id} className="hover:bg-gray-300 hover:text-black dark:hover:bg-gray-300 dark:hover:text-black">
-              <td className="px-6 py-4 whitespace-nowrap">
+              <td className="px-4 py-4 whitespace-nowrap">
                 <div className="text-sm font-medium">{record.name || record.user?.name}</div>
                 <div className="text-sm text-gray-500">{record.email || record.user?.email}</div>
               </td>
@@ -42,11 +42,11 @@ const AttendanceTable = ({ records, loading, userType, onRowClick }) => {
                   {record.status}
                 </span>
               </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm">{record.avgCheckIn}</td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm">{record.avgCheckOut}</td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm">{record.totalWorkTime || "-"}</td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm">{record.totalBreakTime}</td>
-              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+              <td className="px-4 py-4 whitespace-nowrap text-sm">{record.avgCheckIn}</td>
+              <td className="px-4 py-4 whitespace-nowrap text-sm">{record.avgCheckOut}</td>
+              <td className="px-4 py-4 whitespace-nowrap text-sm">{record.totalWorkTime || "-"}</td>
+              <td className="px-4 py-4 whitespace-nowrap text-sm">{record.totalBreakTime}</td>
+              <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                 <button onClick={() => onRowClick(record)} className="text-blue-600 hover:text-blue-900">
                   <Visibility fontSize="small" />
                 </button>
@@ -332,39 +332,42 @@ const AttendanceTracker = () => {
   return (
     <div className="min-h-screen p-6">
       <Toaster />
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">📅 Attendance Tracker</h1>
-        <div className="flex items-center gap-4">
-          <div className="mr-4">
-            <label className="text-sm font-medium mr-2">Select Employee:</label>
+      {/* --- Responsive Header --- */}
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold text-center md:text-left">📅 Attendance Tracker</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-center gap-4">
+          <div className="flex-1">
+            <label htmlFor="employee-filter" className="text-sm font-medium sr-only md:not-sr-only md:mr-2">Employee:</label>
             <select
+              id="employee-filter"
               value={filterEmployeeId}
               onChange={(e) => setFilterEmployeeId(e.target.value)}
-              className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:border-gray-600 "
+              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:border-gray-600"
             >
-              <option value=""className="text-black ">All Employees</option>
+              <option value="" className="text-black">All Employees</option>
               {allEmployees.map((emp) => (
-                <option key={emp._id} value={emp._id}className='text-black'>
+                <option key={emp._id} value={emp._id} className='text-black'>
                   {emp.name} - {emp.position}
                 </option>
               ))}
             </select>
           </div>
 
-          <div>
-            <label className="text-sm font-medium mr-2">Select Date:</label>
+          <div className="flex-1">
+            <label htmlFor="date-filter" className="text-sm font-medium sr-only md:not-sr-only md:mr-2">Date:</label>
             <input
+              id="date-filter"
               type="date"
               value={dayjs(selectedDate).format("YYYY-MM-DD")}
               onChange={handleDateChange}
-              className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:border-gray-600"
+              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:border-gray-600"
             />
           </div>
 
           <button
             onClick={handleOpenManualEntryModal}
             disabled={!filterEmployeeId || activeTab !== 'employees'}
-            className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+            className="w-full sm:w-auto px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             <EditCalendar fontSize="small" />
             Mark Attendance
@@ -407,9 +410,9 @@ const AttendanceTracker = () => {
       ) : (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-6">
             {attendanceSummary.map((summary, index) => (
-              <div key={index} className="shadow rounded-lg p-4 flex items-center gap-4 ">
+              <div key={index} className="shadow rounded-lg p-4 flex items-center gap-4">
                 <div>{summary.icon}</div>
                 <div>
                   <h3 className="text-sm font-medium">{summary.title}</h3>
@@ -420,10 +423,10 @@ const AttendanceTracker = () => {
           </div>
 
           {/* Attendance Table */}
-          <div className="shadow-lg rounded-lg overflow-hidden ">
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700 ">
+          <div className="shadow-lg rounded-lg overflow-hidden">
+            <div className="p-4 md:p-6 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-xl font-semibold">{activeTab === 'employees' ? 'Employee Attendance' : 'HR & Manager Attendance'}</h3>
-              <p className="mt-1">Total: {currentRecords.length} records</p>
+              <p className="mt-1 text-sm text-gray-600">Total: {currentRecords.length} records</p>
             </div>
             <AttendanceTable
               records={currentRecords}
@@ -437,7 +440,7 @@ const AttendanceTracker = () => {
 
       {/* Employee Details Modal */}
       {selectedEmployee && (
-        <div className="fixed inset-0 bg-opacity-50 flex items-center justify-center z-50 p-4 bg-black/50">
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4 bg-black/50">
           <div className="rounded-lg p-6 max-w-md w-full bg-white text-black dark:bg-gray-800 dark:text-white">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Details</h2>
@@ -472,7 +475,7 @@ const AttendanceTracker = () => {
 
       {/* Manual Attendance Entry Modal */}
       {isManualEntryModalOpen && (
-        <div className="fixed inset-0 bg-opacity-50 flex items-center justify-center z-50 p-4 bg-black/50">
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4 bg-black/50">
           <div className="rounded-lg p-6 max-w-lg w-full bg-white text-black dark:bg-gray-800 dark:text-white">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Manual Attendance Entry</h2>

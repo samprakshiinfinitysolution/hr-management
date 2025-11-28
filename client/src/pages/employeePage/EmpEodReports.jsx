@@ -2,9 +2,10 @@
 // pages/EmpEodReports.jsx  (or wherever your component lives)
 import React, { useState, useEffect, useRef } from "react";
 import { toast, Toaster } from "react-hot-toast";
-import { Save } from "lucide-react";
+import { Save, Download } from "lucide-react";
 import API from "../../utils/api";
 import moment from "moment-timezone";
+import * as XLSX from "xlsx-js-style";
 export default function EmpEodReports() {
   const [form, setForm] = useState({
     _id: null, // Add _id to track the current report
@@ -307,6 +308,144 @@ const handleSubmit = async (e) => {
   }
 };
 
+  const handleDownload = () => {
+    if (!form.date) {
+      toast.error("No report data to download.");
+      return;
+    }
+
+    // 1. Create a new workbook
+    const wb = XLSX.utils.book_new();
+
+    // 2. Prepare data for the worksheet
+    const headerData = [
+      ["Date", moment(form.date).tz("Asia/Kolkata").format("DD/MM/YYYY")],
+      ["Reporting Time", form.reportingTime],
+      ["EOD Time", form.eodTime],
+      ["Project", form.project],
+    ];
+
+    const tableHeader = columns.map(col => col.charAt(0).toUpperCase() + col.slice(1));
+    const tableRows = rows.map(row => columns.map(col => row[col] || ""));
+
+    const summaryData = [
+      [], // Spacer
+      ["Summary / Notes"],
+      [form.summary],
+      [], // Spacer
+      ["Next Day Plan"],
+      [form.nextDayPlan],
+    ];
+
+    const finalData = [
+      ...headerData,
+      [], // Spacer
+      tableHeader,
+      ...tableRows,
+      ...summaryData,
+    ];
+
+    // 3. Create worksheet from the data
+    const ws = XLSX.utils.aoa_to_sheet(finalData);
+
+    // --- START: Add Styling (Borders and Header Style) ---
+    const range = XLSX.utils.decode_range(ws["!ref"]);
+
+    const thinBorderStyle = {
+      top: { style: "thin", color: { auto: 1 } },
+      bottom: { style: "thin", color: { auto: 1 } },
+      left: { style: "thin", color: { auto: 1 } },
+      right: { style: "thin", color: { auto: 1 } },
+    };
+
+    const headerStyle = {
+      font: { bold: true },
+      fill: { fgColor: { rgb: "D3D3D3" } }, // Light Gray background
+      border: thinBorderStyle,
+    };
+
+    const tableHeaderRowIndex = headerData.length + 1; // +1 for the spacer row
+
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cell_address = { c: C, r: R };
+        const cell_ref = XLSX.utils.encode_cell(cell_address);
+        let cell = ws[cell_ref];
+        if (!cell) {
+          // Create a blank cell to ensure borders are applied everywhere
+          cell = { v: "" };
+          ws[cell_ref] = cell;
+        }
+        if (!cell.s) {
+          cell.s = {};
+        }
+
+        // Apply header style to the table header row
+        if (R === tableHeaderRowIndex) {
+          cell.s = headerStyle;
+        } else {
+          // Apply only border style to all other cells
+          cell.s.border = thinBorderStyle;
+        }
+
+        // --- START: Apply Wrap Text to all cells for auto-height ---
+        if (!cell.s.alignment) {
+          cell.s.alignment = {};
+        }
+        cell.s.alignment.wrapText = true;
+        cell.s.alignment.vertical = "top"; // Align text to the top
+        // --- END: Apply Wrap Text ---
+      }
+    }
+
+    // --- Set fixed column widths instead of auto-fitting ---
+    const colWidths = columns.map(col => {
+      if (col.toLowerCase() === 'description') {
+        return { wch: 40 }; // 'description' column is wider
+      }
+      if (col.toLowerCase() === 'time') {
+        return { wch: 15 }; // 'time' column is narrower
+      }
+      return { wch: 25 }; // Default width for other columns
+    });
+    ws['!cols'] = colWidths;
+    // --- END: Add Styling ---
+
+    // --- START: Merge Cells for Summary and Next Day Plan ---
+    // Calculate the correct row index for the summary and plan content
+    const summaryContentRowIndex = headerData.length + 1 + 1 + tableRows.length + 1 + 1; // headers + spacer + tableHeader + rows + spacer + title
+    const nextDayPlanContentRowIndex = summaryContentRowIndex + 2 + 1; // summaryContent + spacer + title
+
+    // Initialize merges array if it doesn't exist
+    if (!ws['!merges']) ws['!merges'] = [];
+
+    // Add merge ranges. We merge from the first column (0) to the last column of the table.
+    ws['!merges'].push(
+      { s: { r: summaryContentRowIndex, c: 0 }, e: { r: summaryContentRowIndex, c: columns.length - 1 } },
+      { s: { r: nextDayPlanContentRowIndex, c: 0 }, e: { r: nextDayPlanContentRowIndex, c: columns.length - 1 } }
+    );
+
+    // --- START: Apply Wrap Text and Auto-Height for Merged Cells ---
+    // Get the cell reference for the top-left cell of the merge area
+    const summaryCellRef = XLSX.utils.encode_cell({ r: summaryContentRowIndex, c: 0 });
+    const nextDayPlanCellRef = XLSX.utils.encode_cell({ r: nextDayPlanContentRowIndex, c: 0 });
+
+    // The wrap text style is already applied to all cells in the loop above,
+    // so we don't need to apply a separate style here anymore.
+
+    // Note: We don't need to set a fixed row height (`!rows`).
+    // The `wrapText: true` style tells Excel to auto-adjust the row height upon opening the file.
+    // --- END: Merge Cells ---
+
+
+    // 4. Add worksheet to the workbook
+    XLSX.utils.book_append_sheet(wb, ws, "EOD Report");
+
+    // 5. Trigger the download
+    const fileName = `EOD_Report_${form.date}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  };
+
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -572,14 +711,22 @@ const handleSubmit = async (e) => {
           />
         </div>
 
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-4">
+          <button
+            type="button"
+            onClick={handleDownload}
+            className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700"
+          >
+            <Download size={18} />
+            Download EOD
+          </button>
           <button
             type="submit"
             disabled={formDisabled || isLoading}
             className={`flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg ${formDisabled ? "opacity-60 cursor-not-allowed" : "hover:bg-blue-700"}`}
           >
             <Save size={18} />
-            Save Report
+            {form._id ? "Update Report" : "Save Report"}
           </button>
         </div>
       </form>
