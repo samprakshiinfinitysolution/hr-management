@@ -666,6 +666,15 @@ const handleSubmit = async (e) => {
                           <option value="Pending">Pending</option>
                           <option value="Working">Working</option>
                         </select>
+                      ) : col === "description" ? (
+                        <textarea
+                          value={row[col] || ""}
+                          readOnly={formDisabled || row.task?.includes("Break")}
+                          onChange={(e) => handleRowChange(i, col, e.target.value)}
+                          rows={2} // Set initial height to 2 rows
+                          className={`w-full p-1 border rounded-sm text-sm resize-y ${row.task?.includes("Break") ? "bg-gray-300 text-black" : ""
+                            }`}
+                        />
                       ) : (
                         <input
                           type="text"
