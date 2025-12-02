@@ -7,11 +7,14 @@ import {
   Eye,
   X,
   User,
+  Trash2,
   AlertTriangle,
-  CheckCircle
+  CheckCircle,
+  Settings,
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import API from "../../utils/api";
+import AdminSalarySettings from "./AdminSalarySettings";
 
 export default function SalaryManagement() {
   const [employees, setEmployees] = useState([]);
@@ -23,6 +26,10 @@ export default function SalaryManagement() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedSlip, setSelectedSlip] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showDeleteConfirmationModal, setShowDeleteConfirmationModal] = useState(false);
+  const [slipToDeleteId, setSlipToDeleteId] = useState(null);
+  const [countdown, setCountdown] = useState(5);
   const slipModalRef = useRef(null);
 
   useEffect(() => {
@@ -45,6 +52,17 @@ export default function SalaryManagement() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [selectedSlip]);
 
+  // Countdown for delete confirmation
+  useEffect(() => {
+    if (showDeleteConfirmationModal && countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+    if (!showDeleteConfirmationModal) {
+      setCountdown(); // Reset countdown when modal is closed
+    }
+  }, [showDeleteConfirmationModal, countdown]);
+
 
   const fetchEmployees = async () => {
     try {
@@ -58,7 +76,9 @@ export default function SalaryManagement() {
   const fetchSlips = async () => {
     try {
       const res = await API.get("/salary");
-      setSlips(res.data);
+      // Ensure that we always set an array to the slips state
+      const slipsData = Array.isArray(res.data) ? res.data : [];
+      setSlips(slipsData);
     } catch (err) {
       console.error("Failed to fetch slips:", err);
     }
@@ -86,42 +106,82 @@ export default function SalaryManagement() {
   };
 
   const handleSendSlip = async () => {
-    if (!salaryData) {
-      setError("Please calculate salary first");
-      return;
-    }
-    setLoading(true);
+    if (!salaryData) return toast.error("Calculate salary first");
+
     try {
       await API.post("/salary/send", {
         employeeId: selectedEmployee,
         month: parseInt(month),
         year: parseInt(year),
+
         baseSalary: salaryData.baseSalary,
-        deduction: salaryData.deduction,
+        totalDeduction: salaryData.deduction, // Use totalDeduction to be clear
         remarks: salaryData.remarks,
+
+        attendance: {
+          present: salaryData.presentDays,
+          absent: salaryData.absentDays,
+          halfDay: salaryData.halfDays,
+          late: salaryData.lateDays,
+          earlyCheckout: salaryData.earlyCheckout,
+        },
+
+        earnings: {
+          base: salaryData.baseSalary,
+          hra: salaryData.hra,
+          conveyance: salaryData.conveyance,
+          childrenAllowance: salaryData.childrenAllowance,
+          fixedAllowance: salaryData.fixedAllowance,
+          grossSalary: salaryData.grossSalary,
+        },
+
+        deductions: {
+          absentDeduction: salaryData.absentDeduction,
+          halfDayDeduction: salaryData.halfDayDeduction,
+          lateDeduction: salaryData.lateDeduction,
+          earlyCheckoutDeduction: salaryData.earlyCheckoutDeduction,
+          professionalTax: salaryData.professionalTax,
+          pf: salaryData.pf, // Make sure pf is in salaryData
+          total: salaryData.deduction // This is the total deduction
+        }
       });
-      toast.success("Salary slip sent successfully!");
+
+      toast.success("Slip sent");
       fetchSlips();
-      setSalaryData(null);
+
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to send salary slip");
-    } finally {
-      setLoading(false);
+      console.log(err);
+      toast.error("Slip sending failed");
     }
   };
 
+
   const handleViewSlip = (slip) => {
     setSelectedSlip(slip);
+  };
+
+  const handleDeleteClick = (slipId) => {
+    setSlipToDeleteId(slipId);
+    setShowDeleteConfirmationModal(true);
   };
 
   return (
     <div className="min-h-screen p-6">
       <Toaster />
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8 flex items-center gap-3">
-          <Calculator className="text-blue-600" size={32} />
-          Salary Management
-        </h1>
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold flex items-center gap-3">
+            <Calculator className="text-blue-600" size={32} />
+            Salary Management
+          </h1>
+          <button
+            onClick={() => setShowSettings(true)}
+            className="px-4 py-2 rounded bg-gray-200 text-gray-800 hover:bg-gray-300 flex items-center gap-2"
+          >
+            <Settings size={20} />
+            Salary Rules
+          </button>
+        </div>
 
         {error && (
           <div className="border rounded-lg p-4 mb-6 flex items-center gap-3">
@@ -200,32 +260,46 @@ export default function SalaryManagement() {
               <CheckCircle className="text-green-500" size={24} />
               Salary Calculation Result
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <div className="p-4 rounded-lg">
-                <p className="text-sm">Base Salary</p>
-                <p className="text-xl font-bold">₹{salaryData.baseSalary}</p>
+            <div className="space-y-4">
+              {/* Earnings */}
+              <div className="p-4 border rounded-lg">
+                <h3 className="font-semibold mb-2">Earnings</h3>
+                <div className="flex justify-between"><span>Base Salary</span> <span className="font-mono">₹{salaryData.baseSalary?.toFixed(2) || '0.00'}</span></div>
+                <div className="flex justify-between"><span>Allowances</span> <span className="font-mono">₹{salaryData.totalAllowances?.toFixed(2) || '0.00'}</span></div>
+                <div className="flex justify-between font-bold border-t pt-2 mt-2"><span>Gross Salary</span> <span className="font-mono">₹{salaryData.grossSalary?.toFixed(2) || '0.00'}</span></div>
               </div>
-              <div className="p-4 rounded-lg">
-                <p className="text-sm">Absent Days</p>
-                <p className="text-xl font-bold">{salaryData.absentDays}</p>
+
+              {/* Attendance & Deductions */}
+              <div className="p-4 border rounded-lg">
+                <h3 className="font-semibold mb-2">Attendance & Deductions</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center mb-4">
+                  <div><p className="text-sm">Present</p><p className="font-bold text-lg">{salaryData.presentDays ?? 'N/A'}</p></div>
+                  <div><p className="text-sm">Absent</p><p className="font-bold text-lg">{salaryData.absentDays ?? 'N/A'}</p></div>
+                  <div><p className="text-sm">Half Days</p><p className="font-bold text-lg">{salaryData.halfDays ?? 'N/A'}</p></div>
+                  <div><p className="text-sm">Late</p><p className="font-bold text-lg">{salaryData.lateDays ?? 'N/A'}</p></div>
+                  <div><p className="text-sm">Early Checkout</p><p className="font-bold text-lg">{salaryData.earlyCheckout ?? 'N/A'}</p></div>
+                </div>
+                <div className="flex justify-between"><span>Absent Deduction</span> <span className="font-mono">- ₹{salaryData.absentDeduction?.toFixed(2) || '0.00'}</span></div>
+                <div className="flex justify-between"><span>Half Day Deduction</span> <span className="font-mono">- ₹{salaryData.halfDayDeduction?.toFixed(2) || '0.00'}</span></div>
+                <div className="flex justify-between"><span>Late Deduction</span> <span className="font-mono">- ₹{salaryData.lateDeduction?.toFixed(2) || '0.00'}</span></div>
+                <div className="flex justify-between"><span>Early Checkout Deduction</span> <span className="font-mono">- ₹{salaryData.earlyCheckoutDeduction?.toFixed(2) || '0.00'}</span></div>
+                <div className="flex justify-between font-bold border-t pt-2 mt-2"><span>Total Deduction</span> <span className="font-mono">- ₹{salaryData.deduction?.toFixed(2) || '0.00'}</span></div>
               </div>
-              <div className="p-4 rounded-lg">
-                <p className="text-sm">Late Days</p>
-                <p className="text-xl font-bold">{salaryData.lateDays}</p>
-              </div>
-              <div className="p-4 rounded-lg">
-                <p className="text-sm">Total Deduction</p>
-                <p className="text-xl font-bold">₹{salaryData.deduction}</p>
-              </div>
-              <div className="p-4 rounded-lg md:col-span-2">
-                <p className="text-sm">Net Salary</p>
-                <p className="text-2xl font-bold">₹{salaryData.netSalary}</p>
+
+              {/* Net Salary */}
+              <div className="p-4 text-black bg-gray-500 dark:bg-gray-300 rounded-lg flex justify-between items-center">
+                <p className="text-lg font-bold">Net Payable Salary</p>
+                <p className="text-2xl font-bold font-mono">₹{salaryData.netSalary?.toFixed(2) || '0.00'}</p>
               </div>
             </div>
-            <div className="mb-6">
+
+            <div className="mb-6 mt-6">
               <p className="text-sm font-medium mb-2">Remarks</p>
-              <p className="p-4 rounded-lg">{salaryData.remarks}</p>
+              <p className="p-4 rounded-lg bg-gray-50 dark:bg-gray-300 text-sm text-black">
+                {salaryData.remarks || "No remarks."}
+              </p>
             </div>
+
             <button
               onClick={handleSendSlip}
               disabled={loading}
@@ -292,6 +366,12 @@ export default function SalaryManagement() {
                         >
                           <Eye size={16} />
                         </button>
+                        <button
+                          onClick={() => handleDeleteClick(slip._id)}
+                          className="hover:text-red-600 ml-2"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -303,33 +383,172 @@ export default function SalaryManagement() {
 
         {/* View Slip Modal */}
         {selectedSlip && (
-          <div className="fixed inset-0 bg-opacity-50 flex items-center justify-center z-50 p-4 bg-black/50">
-            <div ref={slipModalRef} className="rounded-lg p-6 max-w-md w-full bg-white text-black dark:bg-gray-800 dark:text-white">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold">Salary Slip Details</h2>
-                <button onClick={() => setSelectedSlip(null)} className="hover:text-gray-700">
-                  <X size={20} />
+          <div className="fixed inset-0 bg-opacity-50 flex items-center justify-center z-50 p-5 bg-black/50">
+            <div ref={slipModalRef} className="rounded-lg shadow-xl max-w-2xl w-full bg-white text-black dark:bg-gray-800 dark:text-white max-h-[90vh] overflow-y-auto">
+
+              {/* HEADER */}
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold p-4">
+                  Salary Slip for {selectedSlip.month}/{selectedSlip.year}
+                </h2>
+                <button onClick={() => setSelectedSlip(null)} className="hover:text-red-500">
+                  <X size={24} />
                 </button>
               </div>
-              <div className="space-y-3">
-                <p><strong>Employee:</strong> {selectedSlip.employeeId?.name || "N/A"}</p>
-                <p><strong>Month/Year:</strong> {selectedSlip.month}/{selectedSlip.year}</p>
-                <p><strong>Base Salary:</strong> ₹{selectedSlip.baseSalary}</p>
-                <p><strong>Deductions:</strong> ₹{selectedSlip.deduction}</p>
-                <p className="font-bold"><strong>Net Salary:</strong> ₹{selectedSlip.netSalary}</p>
-                <p><strong>Remarks:</strong> {selectedSlip.remarks || "-"}</p>
+
+              <div className="p-6 space-y-4">
+
+                {/* EMPLOYEE NAME */}
+                <p className="font-semibold text-lg">
+                  Employee: {selectedSlip.employeeId?.name || "N/A"}
+                </p>
+
+                {/* EARNINGS */}
+                <div className="p-4 border rounded-lg">
+                  <h3 className="font-semibold mb-2">Earnings</h3>
+
+                  <div className="flex justify-between">
+                    <span>Base Salary</span>
+                    <span className="font-mono">
+                      ₹{Number(selectedSlip.earnings?.base ?? selectedSlip.baseSalary).toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span>Allowances</span>
+                    <span className="font-mono">
+                      ₹{Number((selectedSlip.earnings?.grossSalary ?? 0) - (selectedSlip.baseSalary ?? 0)).toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between font-bold border-t pt-2 mt-2">
+                    <span>Gross Salary</span>
+                    <span className="font-mono">
+                      ₹{Number(selectedSlip.earnings?.grossSalary ?? 0).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* ATTENDANCE & DEDUCTIONS */}
+                <div className="p-4 border rounded-lg">
+                <h3 className="font-semibold mb-2">Attendance & Deductions</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center mb-4">
+                    <div><p className="text-sm">Present</p><p className="font-bold text-lg">{selectedSlip.attendance?.present ?? 'N/A'}</p></div>
+                    <div><p className="text-sm">Absent</p><p className="font-bold text-lg">{selectedSlip.attendance?.absent ?? 'N/A'}</p></div>
+                    <div><p className="text-sm">Half Days</p><p className="font-bold text-lg">{selectedSlip.attendance?.halfDay ?? 'N/A'}</p></div>
+                    <div><p className="text-sm">Late</p><p className="font-bold text-lg">{selectedSlip.attendance?.late ?? 'N/A'}</p></div>
+                    <div><p className="text-sm">Early Checkout</p><p className="font-bold text-lg">{selectedSlip.attendance?.earlyCheckout ?? 'N/A'}</p></div>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Absent Deduction</span>
+                    <span className="font-mono">- ₹{Number(selectedSlip.deductions?.absentDeduction ?? 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Half Day Deduction</span>
+                    <span className="font-mono">- ₹{Number(selectedSlip.deductions?.halfDayDeduction ?? 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Late Deduction</span>
+                    <span className="font-mono">- ₹{Number(selectedSlip.deductions?.lateDeduction ?? 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Early Checkout Deduction</span>
+                    <span className="font-mono">- ₹{Number(selectedSlip.deductions?.earlyCheckoutDeduction ?? 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between font-bold border-t pt-2 mt-2">
+                    <span>Total Deduction</span>
+                    <span className="font-mono">
+                      - ₹{Number(selectedSlip.deduction ?? 0).toFixed(2)}
+                    </span>
+                  </div>
+              </div>
+
+                {/* NET SALARY */}
+                <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg flex justify-between items-center">
+                  <p className="text-lg font-bold">Net Payable Salary</p>
+                  <p className="text-2xl font-bold font-mono">
+                    ₹{Number(selectedSlip.netSalary ?? 0).toFixed(2)}
+                  </p>
+                </div>
+
+                {/* REMARKS */}
+                <p><strong>Remarks:</strong> {selectedSlip.remarks || "No remarks."}</p>
                 <p className="text-xs text-gray-500">
                   <strong>Sent On:</strong> {new Date(selectedSlip.sentAt).toLocaleString()}
                 </p>
+
               </div>
+
+              {/* CLOSE BUTTON */}
               <div className="mt-6 flex justify-end">
                 <button
                   onClick={() => setSelectedSlip(null)}
-                  className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500"
+                  className="px-4 py-2 m-4 rounded-lg bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
                 >
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirmationModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="relative rounded-lg p-6 max-w-md w-full bg-white text-black dark:bg-gray-800 dark:text-white">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">Confirm Deletion</h2>
+                <button onClick={() => { setShowDeleteConfirmationModal(false); setSlipToDeleteId(null); }} className="hover:text-gray-700">
+                  <X size={20} />
+                </button>
+              </div>
+              <p className="text-gray-700 mb-6">
+                Are you sure you want to delete this salary slip? This action cannot be undone.
+              </p>
+              <div className="flex justify-end space-x-4">
+                <button
+                  onClick={() => {
+                    setShowDeleteConfirmationModal(false);
+                    setSlipToDeleteId(null);
+                  }}
+                  className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      await API.delete(`/salary/${slipToDeleteId}`);
+                      toast.success("Salary slip deleted successfully");
+                      fetchSlips();
+                      setShowDeleteConfirmationModal(false);
+                      setSlipToDeleteId(null);
+                    } catch (err) {
+                      toast.error(err.response?.data?.message || "Failed to delete slip");
+                    }
+                  }}
+                  disabled={countdown > 0}
+                  className={`px-4 py-2 text-white rounded-lg transition ${countdown > 0 ? "bg-red-400 cursor-not-allowed" : "bg-red-600 hover:bg-red-700"}`}
+                >
+                  {countdown > 0 ? `Yes, Delete (${countdown})` : "Yes, Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Salary Settings Modal */}
+        {showSettings && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+              <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white dark:bg-gray-800 z-10">
+                <h2 className="text-xl font-bold text-white">Salary Rule Settings</h2>
+                <button onClick={() => setShowSettings(false)} className="hover:text-red-500 text-red-400">
+                  <X size={24} />
+                </button>
+              </div>
+              <AdminSalarySettings />
             </div>
           </div>
         )}

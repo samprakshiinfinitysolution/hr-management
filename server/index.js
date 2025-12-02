@@ -24,6 +24,7 @@ import chatRoutes from "./routes/chatRoutes.js";
 import policyRoutes from "./routes/policyRoutes.js";
 import eodRoutes from "./routes/eodRoutes.js";
 import eodTemplateRoutes from "./routes/eodTemplateRoutes.js";
+import salaryRuleRoutes from "./routes/salaryRuleRoutes.js";
 dotenv.config();
 
 const app = express();
@@ -85,6 +86,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/policies", policyRoutes);
 app.use("/api/eod", eodRoutes);
 app.use("/eod-template", eodTemplateRoutes);
+app.use("/api/salary-rules", salaryRuleRoutes);
 app.use("/api", employeeRoutes); 
 
 // Run auto-checkout every 1 minute

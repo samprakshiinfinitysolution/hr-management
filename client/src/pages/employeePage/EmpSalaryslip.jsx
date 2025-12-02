@@ -1,28 +1,23 @@
+
 import React, { useEffect, useState } from "react";
 import {
   FileText,
   Calendar,
-  AlertTriangle,
-  CheckCircle,
   Eye,
   Download,
   X,
+  AlertTriangle,
+  CheckCircle,
 } from "lucide-react";
-import { useSelector } from "react-redux";
 import toast, { Toaster } from "react-hot-toast";
 import API from "../../utils/api";
 import { jsPDF } from "jspdf";
 
-export default function EmpSalaryslip() {
+export default function EmpSalarySlip() {
   const [slips, setSlips] = useState([]);
-  const [employee, setEmployee] = useState({
-    name: "John Doe",
-    position: "Software Engineer",
-    employeeId: "EMP123",
-  });
+  const [employee, setEmployee] = useState({});
   const [selectedSlip, setSelectedSlip] = useState(null);
-  const { isDarkMode } = useSelector((state) => state.settings);
-  const logo = "/logo.png"; // ✅ Correct logo path (from public folder)
+  const logo = "/logo.png";
 
   useEffect(() => {
     fetchEmployee();
@@ -32,189 +27,151 @@ export default function EmpSalaryslip() {
   const fetchEmployee = async () => {
     try {
       const res = await API.get("/profile");
-      setEmployee({
-        name: res.data.name || "John Doe",
-        position: res.data.position || "Software Engineer",
-        employeeId: res.data._id || "EMP123",
-      });
+      setEmployee(res.data);
     } catch {
-      toast.error("Error fetching profile");
+      toast.error("Error fetching employee data");
     }
   };
 
   const fetchSlips = async () => {
     try {
       const res = await API.get("/salary/my-slips");
-      const formattedSlips = res.data.map((slip) => ({
-        month: new Date(0, slip.month - 1).toLocaleString("default", {
-          month: "long",
-        }),
-        year: slip.year,
-        baseSalary: slip.baseSalary,
-        deduction: slip.deduction,
-        netSalary: slip.netSalary,
-        remarks: slip.remarks || "No remarks",
-        color:
-          slip.deduction > 1000
-            ? "text-red-600"
-            : slip.deduction > 0
-            ? "text-yellow-600"
-            : "text-green-600",
-        paidDays: 30,
-      }));
-      setSlips(formattedSlips);
-    } catch {
-      toast.error("Error fetching salary slips");
+      // Ensure that we always set an array to the slips state
+      const slipsData = Array.isArray(res.data) ? res.data : [];
+      setSlips(slipsData);
+    } catch (err) {
+      console.error("Failed to fetch slips:", err);
+      toast.error(err.response?.data?.message || "Unable to load salary slips");
     }
   };
-
-  // ✅ FIXED WORKING PDF DOWNLOAD
-  const handleDownload = async (data) => {
+  const handleDownload = async (slip) => {
     try {
       const doc = new jsPDF("p", "pt", "a4");
 
-      // Load logo properly
+      // Logo Load
       const img = new Image();
       img.src = logo;
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-      });
+      await img.decode();
 
       let y = 40;
       doc.addImage(img, "PNG", 230, y, 150, 80);
       y += 100;
 
+      // Header
       doc.setFont("helvetica", "bold");
       doc.setFontSize(18);
-      doc.setTextColor(33, 66, 99);
-      doc.text("Samprakshi Infinity Solution Pvt. Ltd.", 297.5, y, {
-        align: "center",
-      });
-
-      y += 25;
-      doc.setFontSize(13);
-      doc.setTextColor(80);
-      doc.text(`Salary Slip - ${data.month} ${data.year}`, 297.5, y, {
-        align: "center",
-      });
-
+      doc.text("Salary Slip", 297, y, { align: "center" });
       y += 20;
-      doc.setDrawColor(150);
+
+      doc.setFontSize(13);
+      doc.text(`${slip.month}/${slip.year}`, 297, y, { align: "center" });
+      y += 25;
       doc.line(40, y, 555, y);
       y += 20;
 
-      // Employee Details
-      doc.setFillColor(230, 240, 255);
-      doc.roundedRect(40, y, 515, 25, 5, 5, "F");
-      doc.setFont("helvetica", "bold");
+      // ---------------------------------------------
+      // EMPLOYEE DETAILS
+      // ---------------------------------------------
       doc.setFontSize(12);
-      doc.setTextColor(33, 66, 99);
-      doc.text("Employee Details", 50, y + 17);
+      doc.text(`Name: ${employee.name}`, 40, y);
+      doc.text(`Employee ID: ${employee._id}`, 300, y);
+      y += 20;
 
-      y += 35;
-      const empBoxHeight = 90;
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(0, 0, 0);
-      doc.roundedRect(40, y, 515, empBoxHeight, 5, 5);
+      doc.text(`Designation: ${employee.position || "-"}`, 40, y);
+      doc.text(`Paid Days: ${slip.attendance?.present ?? 0}`, 300, y);
+      y += 20;
 
-      const empFields = [
-        [`Name: ${employee.name}`, `Employee ID: ${employee.employeeId}`],
-        [`Designation: ${employee.position}`, `Month: ${data.month}`],
-        [`Year: ${data.year}`, `Paid Days: ${data.paidDays || 30}`],
-      ];
+      doc.text(`Month: ${slip.month}`, 40, y);
+      doc.text(`Year: ${slip.year}`, 300, y);
+      y += 30;
 
-      let fieldY = y + 15;
-      empFields.forEach((row, idx) => {
-        doc.text(row[0], 50, fieldY);
-        doc.text(row[1], 300, fieldY);
-        fieldY += 25;
-      });
+      doc.line(40, y, 555, y);
+      y += 25;
 
-      y += empBoxHeight + 20;
+      // ---------------------------------------------
+      // TABLE: EARNINGS + DEDUCTIONS
+      // ---------------------------------------------
+      doc.setFontSize(12);
+      doc.text("Earnings", 60, y);
+      doc.text("Amount (Rs.)", 230, y, { align: "right" });
 
-      // Salary calculations
-      const basic = data.baseSalary;
-      const hra = Math.round(basic * 0.25);
-      const conveyance = 2000;
-      const childrenAllowance = 1000;
-      const fixedAllowance = 1000;
-      const gross = basic + hra + conveyance + childrenAllowance + fixedAllowance;
+      doc.text("Deductions", 350, y);
+      doc.text("Amount (Rs.)", 550, y, { align: "right" });
+      y += 20;
 
-      const pf = Math.round(basic * 0.12);
-      const professionalTax = 200;
-      const totalDeduction = pf + professionalTax + (data.deduction || 0);
-      const netPay = gross - totalDeduction;
-
+      // Earnings Array
       const earnings = [
-        ["Basic", basic],
-        ["HRA", hra],
-        ["Conveyance", conveyance],
-        ["CEA", childrenAllowance],
-        ["Fixed Allowance", fixedAllowance],
-        ["Gross Earnings", gross],
+        ["Basic Salary", slip.earnings?.base ?? slip.baseSalary],
+        ["HRA", slip.earnings?.hra ?? 0],
+        ["Conveyance", slip.earnings?.conveyance ?? 0],
+        ["Children Allowance", slip.earnings?.childrenAllowance ?? 0],
+        ["Fixed Allowance", slip.earnings?.fixedAllowance ?? 0],
       ];
 
+      // Deductions Array
       const deductions = [
-        ["EPF", pf],
-        ["Professional Tax", professionalTax],
-        ["Other Deductions", data.deduction || 0],
-        ["Total Deductions", totalDeduction],
+        ["Absent Deduction", slip.deductions?.absentDeduction],
+        ["Half Day Deduction", slip.deductions?.halfDayDeduction],
+        ["Late Deduction", slip.deductions?.lateDeduction],
+        ["Early Checkout Deduction", slip.deductions?.earlyCheckoutDeduction],
+        ["PF", slip.deductions?.pf],
+        ["Professional Tax", slip.deductions?.professionalTax],
       ];
 
-      // Header Row
-      doc.setFillColor(230, 240, 255);
-      doc.roundedRect(40, y, 515, 25, 5, 5, "F");
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(33, 66, 99);
-      doc.setFontSize(12);
-      doc.text("Earnings", 60, y + 17);
-      doc.text("Amount (Rs.)", 235, y + 17, { align: "right" });
-      doc.text("Deductions", 350, y + 17);
-      doc.text("Amount (Rs.)", 530, y + 17, { align: "right" });
 
-      y += 35;
-
-      // Table
-      doc.setTextColor(0, 0, 0);
-      const tableHeight = Math.max(earnings.length, deductions.length) * 18 + 10;
-      doc.roundedRect(40, y, 515, tableHeight, 5, 5);
+      const maxRows = Math.max(earnings.length, deductions.length);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(11);
 
-      const maxRows = Math.max(earnings.length, deductions.length);
-      let rowHeight = 18;
-      let rowY = y + 15;
-
       for (let i = 0; i < maxRows; i++) {
         if (earnings[i]) {
-          doc.text(`${i + 1}. ${earnings[i][0]}`, 50, rowY);
-          doc.text(`Rs. ${earnings[i][1]}`, 235, rowY, { align: "right" });
+          doc.text(`${i + 1}. ${earnings[i][0]}`, 40, y);
+          doc.text(`Rs. ${Number(earnings[i][1] || 0).toFixed(2)}`, 250, y, {
+            align: "right",
+          });
         }
+
         if (deductions[i]) {
-          doc.text(`${i + 1}. ${deductions[i][0]}`, 350, rowY);
-          doc.text(`Rs. ${deductions[i][1]}`, 530, rowY, { align: "right" });
+          doc.text(`${i + 1}. ${deductions[i][0]}`, 320, y);
+          doc.text(`Rs. ${Number(deductions[i][1] || 0).toFixed(2)}`, 550, y, {
+            align: "right",
+          });
         }
-        rowY += rowHeight;
+        y += 18;
       }
 
-      y += tableHeight + 20;
+      y += 10;
+      doc.line(40, y, 555, y);
+      y += 15;
 
-      // Net Pay Box
-      doc.setFillColor(230, 240, 255);
-      doc.roundedRect(40, y, 515, 30, 5, 5, "F");
+      // ---------------------------------------------
+      // TOTALS
+      // ---------------------------------------------
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.setTextColor(33, 66, 99);
-      doc.text("Net Pay", 50, y + 20);
-      doc.text(`Rs. ${netPay}`, 550, y + 20, { align: "right" });
-      y += 50;
 
-      // Footer
+      const grossSalary = slip.earnings?.grossSalary ?? 0;
+      const totalDeduction = slip.deductions?.total ?? 0;
+
+      doc.text("Gross Salary", 40, y);
+      doc.text(`Rs. ${grossSalary.toFixed(2)}`, 250, y, { align: "right" });
+
+      doc.text("Total Deductions", 320, y);
+      doc.text(`Rs. ${totalDeduction.toFixed(2)}`, 550, y, {
+        align: "right",
+      });
+      y += 25;
+
+      // ---------------------------------------------
+      // NET PAY
+      // ---------------------------------------------
+      doc.setFontSize(14);
+      doc.text("Net Pay", 40, y);
+      doc.text(`Rs. ${(slip.netSalary || 0).toFixed(2)}`, 550, y, {
+        align: "right",
+      });
+
+      y += 40;
       doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(100);
       doc.text(
         "*HRA: House Rent Allowance, CEA: Children Education Allowance",
         40,
@@ -226,136 +183,108 @@ export default function EmpSalaryslip() {
         y + 15
       );
 
-      // ✅ Save file
-      doc.save(`SalarySlip_${data.month}_${data.year}.pdf`);
+      const monthName = new Date(0, slip.month - 1).toLocaleString("default", {
+        month: "long",
+      });
+      doc.save(`SalarySlip_${monthName}_${slip.year}.pdf`);
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to generate PDF");
+      console.log(err);
+      toast.error("PDF generation failed");
     }
   };
 
+  // ---------------------------------------------
+  // UI
+  // ---------------------------------------------
   return (
-    <div className="min-h-screen  p-6 flex justify-center items-start">
+    <div className="min-h-screen p-5">
       <Toaster />
-      <div className="w-screen max-w-4xl mx-auto rounded-2xl p-6 border-gray-200">
-      
-          <FileText className="text-blue-600 w-8 h-8" />
-          <h1 className="text-3xl font-bold ">Salary Slip Summary</h1>
 
-        <p className=" mb-6">
-          View or download your last three months’ salary slips.
-        </p>
+      <h1 className="text-2xl font-bold mb-5 flex gap-2 items-center">
+        <FileText size={26} className="text-blue-600" />
+        Salary Slip Summary
+      </h1>
 
+      {slips.length === 0 ? (
+        <p>No salary slips available.</p>
+      ) : (
         <div className="space-y-4">
-          {slips.length === 0 ? (
-            <div className="text-center py-8 ">
-              <FileText className="mx-auto h-12 w-12  mb-4" />
-              <p>No salary slips available</p>
-            </div>
-          ) : (
-            slips.map((data, idx) => (
-              <div
-                key={idx}
-                className="  border-gray-300 rounded-xl p-4 shadow-sm hover:shadow-2xl transition"
-              >
-                <div className="flex justify-between items-center mb-2">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="text-blue-500" size={18} />
-                    <h2 className="font-semibold text-lg ">
-                      {data.month} {data.year}
-                    </h2>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setSelectedSlip(data)}
-                      className="flex items-center gap-1 text-sm bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md"
-                    >
-                      <Eye size={14} /> View
-                    </button>
-                    <button
-                      onClick={() => handleDownload(data)}
-                      className="flex items-center gap-1 text-sm bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-md"
-                    >
-                      <Download size={14} /> Download
-                    </button>
-                  </div>
-                </div>
+          {slips.map((slip, i) => (
+            <div
+              key={i}
+              className="p-4 rounded-xl shadow bg-white border border-gray-200"
+            >
+              <div className="flex justify-between">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <Calendar size={18} />
+                  {new Date(0, slip.month - 1).toLocaleString("default", {
+                    month: "long",
+                  })}{" "}
+                  {slip.year}
+                </h2>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-1 ">
-                  <p>
-                    <span className="font-semibold">Base Salary:</span> ₹
-                    {data.baseSalary}
-                  </p>
-                  <p>
-                    <span className="font-semibold">Deduction:</span>{" "}
-                    <span
-                      className={
-                        data.deduction > 0
-                          ? "text-red-600 font-medium"
-                          : "text-green-600 font-medium"
-                      }
-                    >
-                      ₹{data.deduction}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="font-semibold">Net Pay:</span> ₹
-                    {data.netSalary}
-                  </p>
-                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSelectedSlip(slip)}
+                    className="bg-green-500 text-white px-3 py-1 rounded-md flex items-center gap-1"
+                  >
+                    <Eye size={14} /> View
+                  </button>
 
-                <div className="flex items-center gap-2 mt-2">
-                  {data.remarks !== "No remarks" ? (
-                    <AlertTriangle className={data.color} size={18} />
-                  ) : (
-                    <CheckCircle className={data.color} size={18} />
-                  )}
-                  <p className={`${data.color} font-semibold text-sm`}>
-                    {data.remarks}
-                  </p>
+                  <button
+                    onClick={() => handleDownload(slip)}
+                    className="bg-blue-500 text-white px-3 py-1 rounded-md flex items-center gap-1"
+                  >
+                    <Download size={14} /> Download
+                  </button>
                 </div>
               </div>
-            ))
-          )}
+
+              <p className="mt-2 font-medium">
+                Base Salary: ₹{slip.baseSalary}
+              </p>
+              <p className="font-medium">Net Salary: ₹{slip.netSalary}</p>
+
+              <div className="mt-2 flex items-center gap-2 text-sm">
+                {slip.totalDeduction > 0 ? (
+                  <AlertTriangle size={16} className="text-yellow-600" />
+                ) : (
+                  <CheckCircle size={16} className="text-green-600" />
+                )}
+                <p><strong>Remarks:</strong> {slip.remarks || "No remarks"}</p>
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
+      )}
 
-      {/* -------- VIEW MODAL -------- */}
+      {/* VIEW MODAL */}
       {selectedSlip && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-  <div className="relative rounded-lg p-6 max-w-lg w-full bg-white text-black dark:bg-gray-800 dark:text-white shadow-lg">
+        <div className="fixed inset-0 bg-black/40 flex justify-center items-center p-4">
+          <div className="bg-white rounded-lg w-full max-w-lg p-5 relative shadow-xl">
+            <button
+              className="absolute right-3 top-3"
+              onClick={() => setSelectedSlip(null)}
+            >
+              <X size={20} />
+            </button>
 
-    {/* Close Button */}
-    <button
-      onClick={() => setSelectedSlip(null)}
-      className="absolute top-3 right-3 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition"
-      title="Close"
-    >
-      <X size={20} />
-    </button>
+            <h2 className="text-xl font-bold mb-4">
+              Salary Slip ({new Date(0, selectedSlip.month - 1).toLocaleString("default", { month: "long" })}/{selectedSlip.year})
+            </h2>
 
-    <h2 className="text-xl font-bold mb-4 text-center text-blue-600 dark:text-blue-400">
-      Salary Slip - {selectedSlip.month} {selectedSlip.year}
-    </h2>
+            <p>Base Salary: ₹{selectedSlip.baseSalary}</p>
+            <p>Allowances: ₹{(selectedSlip.earnings?.grossSalary - selectedSlip.baseSalary)?.toFixed(2) || '0.00'}</p>
+            <p>Deduction: ₹{selectedSlip.deduction?.toFixed(2) || '0.00'}</p>
+            <p className="font-bold text-lg mt-3">
+              Net Pay: ₹{selectedSlip.netSalary}
+            </p>
 
-    <p><strong>Base Salary:</strong> ₹{selectedSlip.baseSalary}</p>
-    <p><strong>Deduction:</strong> ₹{selectedSlip.deduction}</p>
-    <p><strong>Net Pay:</strong> ₹{selectedSlip.netSalary}</p>
-    <p className="mt-2"><strong>Remarks:</strong> {selectedSlip.remarks}</p>
-
-    {/* Optional Cancel Button at bottom */}
-    <div className="mt-6 flex justify-end">
-      <button
-        onClick={() => setSelectedSlip(null)}
-        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg transition"
-      >
-        Cancel
-      </button>
-    </div>
-
-  </div>
-</div>
-
+            <p className="mt-3">
+              <strong>Remarks:</strong> {selectedSlip.remarks || "No remarks"}
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );
