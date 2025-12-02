@@ -212,7 +212,7 @@ export default function EmpSalarySlip() {
           {slips.map((slip, i) => (
             <div
               key={i}
-              className="p-4 rounded-xl shadow bg-white border border-gray-200"
+              className="p-4 rounded-xl shadow  border border-gray-200"
             >
               <div className="flex justify-between">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -261,7 +261,7 @@ export default function EmpSalarySlip() {
       {/* VIEW MODAL */}
       {selectedSlip && (
         <div className="fixed inset-0 bg-black/40 flex justify-center items-center p-4">
-          <div className="bg-white rounded-lg w-full max-w-lg p-5 relative shadow-xl">
+          <div className="bg-gray-300 text-black rounded-lg w-full max-w-lg p-5 relative shadow-xl">
             <button
               className="absolute right-3 top-3"
               onClick={() => setSelectedSlip(null)}

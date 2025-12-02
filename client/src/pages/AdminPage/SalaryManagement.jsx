@@ -503,7 +503,7 @@ export default function SalaryManagement() {
                   <X size={20} />
                 </button>
               </div>
-              <p className="text-gray-700 mb-6">
+              <p className=" mb-6">
                 Are you sure you want to delete this salary slip? This action cannot be undone.
               </p>
               <div className="flex justify-end space-x-4">
