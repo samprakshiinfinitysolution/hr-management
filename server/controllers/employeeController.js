@@ -10,28 +10,119 @@ import Attendance from "../models/attendanceModel.js"; // if used
 // ... other imports if required
 
 // LOGIN EMPLOYEE
+// export const loginEmployee = async (req, res) => {
+//   try {
+//     const { email, password } = req.body;
+//     const employee = await Employee.findOne({ email: email.toLowerCase() });
+//     if (!employee) return res.status(400).json({ message: "Employee not found" });
+
+//     const isMatch = await bcrypt.compare(password, employee.password);
+//     if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
+
+//     const token = jwt.sign({
+//       id: employee._id,
+//       role: "employee",
+//       adminId: employee.createdBy || employee.adminId,
+//     }, jwtSecret, { expiresIn: "7d" });
+
+//     res.json({
+//       token,
+//       employee: { _id: employee._id, name: employee.name, email, adminId: employee.createdBy || employee.adminId },
+//     });
+//   } catch (error) {
+//     console.error("loginEmployee error:", error);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
+
 export const loginEmployee = async (req, res) => {
   try {
     const { email, password } = req.body;
+
     const employee = await Employee.findOne({ email: email.toLowerCase() });
-    if (!employee) return res.status(400).json({ message: "Employee not found" });
+    if (!employee) {
+      return res.status(400).json({ message: "Employee not found" });
+    }
 
     const isMatch = await bcrypt.compare(password, employee.password);
-    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
 
-    const token = jwt.sign({
-      id: employee._id,
-      role: "employee",
-      adminId: employee.createdBy || employee.adminId,
-    }, jwtSecret, { expiresIn: "7d" });
+    // -------------------------------
+    // ACCESS TOKEN (Short Expiry)
+    // -------------------------------
+    const accessToken = jwt.sign(
+      {
+        id: employee._id,
+        role: "employee",
+        adminId: employee.createdBy || employee.adminId,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" } // short life
+    );
+
+    // -------------------------------
+    // REFRESH TOKEN (Long Expiry)
+    // -------------------------------
+    const refreshToken = jwt.sign(
+      {
+        id: employee._id,
+      },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    // If you want, you can store refresh token in DB for extra security
+    // employee.refreshToken = refreshToken;
+    // await employee.save();
 
     res.json({
-      token,
-      employee: { _id: employee._id, name: employee.name, email, adminId: employee.createdBy || employee.adminId },
+      accessToken,
+      refreshToken,
+      employee: {
+        _id: employee._id,
+        name: employee.name,
+        email: employee.email,
+        adminId: employee.createdBy || employee.adminId,
+      },
     });
   } catch (error) {
     console.error("loginEmployee error:", error);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const refreshEmployeeAccessToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({ message: "Refresh token missing" });
+    }
+
+    // Verify refresh token
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    } catch (err) {
+      return res.status(401).json({ message: "Invalid refresh token" });
+    }
+
+    // Create new access token
+    const newAccessToken = jwt.sign(
+      {
+        id: decoded.id,
+        role: "employee",
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
+
+    res.json({ accessToken: newAccessToken });
+  } catch (error) {
+    console.error("refreshEmployeeAccessToken error:", error);
+    return res.status(500).json({ message: "Server error" });
   }
 };
 

@@ -23,6 +23,38 @@ function EmployeeLogin() {
     setSuccess("");
   };
 
+  // const handleLogin = async (e) => {
+  //   e.preventDefault();
+  //   setError("");
+  //   setSuccess("");
+  //   setLoading(true);
+
+  //   try {
+  //     const res = await API.post("/login", form);
+  //     const { token, employee } = res.data;
+
+  //     dispatch(
+  //       loginSuccess({
+  //         user: { _id: employee._id, name: employee.name, email: employee.email, role: "employee" }, // Include _id
+  //         token,
+  //       })
+  //     );
+
+  //     localStorage.setItem("token", token);
+  //     localStorage.setItem("role", "employee");
+  //     setSuccess("Login successful");
+
+  //     setTimeout(() => {
+  //       navigate("/employee");
+  //       setForm({ email: "", password: "" });
+  //     }, 1000);
+  //   } catch (err) {
+  //     setError(err.response?.data?.message || "Login failed. Please try again.");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
@@ -31,29 +63,44 @@ function EmployeeLogin() {
 
     try {
       const res = await API.post("/login", form);
-      const { token, employee } = res.data;
+      const { accessToken, refreshToken, employee } = res.data;
 
+      const userData = {
+        id: employee._id,
+        name: employee.name,
+        email: employee.email,
+        role: "employee",
+      };
+
+      // Redux dispatch
       dispatch(
         loginSuccess({
-          user: { _id: employee._id, name: employee.name, email: employee.email, role: "employee" }, // Include _id
-          token,
+          user: userData,
+          token: accessToken, // 🔥 Important
         })
       );
 
-      localStorage.setItem("token", token);
+      // Save tokens & user
+      localStorage.setItem("accessToken", accessToken);
+      localStorage.setItem("refreshToken", refreshToken);
       localStorage.setItem("role", "employee");
+      localStorage.setItem("user", JSON.stringify(userData));
+
       setSuccess("Login successful");
 
       setTimeout(() => {
         navigate("/employee");
         setForm({ email: "", password: "" });
-      }, 1000);
+      }, 800);
     } catch (err) {
-      setError(err.response?.data?.message || "Login failed. Please try again.");
+      setError(
+        err.response?.data?.message || "Login failed. Please try again."
+      );
     } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen w-full lg:grid lg:grid-cols-2">

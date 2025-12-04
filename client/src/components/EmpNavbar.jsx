@@ -95,11 +95,24 @@ export default function EmpNavbar({ toggleSidebar }) {
     }
   };
 
+  // const handleLogout = () => {
+  //   toast.success("Logout successfully");
+  //   localStorage.removeItem("token");
+  //   localStorage.removeItem("role");
+  //   navigate("/");
+  // };
+
   const handleLogout = () => {
     toast.success("Logout successfully");
-    localStorage.removeItem("token");
+
+    // REMOVE NEW TOKEN KEYS
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("user");
     localStorage.removeItem("role");
-    navigate("/");
+
+    navigate("/", { replace: true });
+    window.location.reload(); // optional but recommended for clean logout
   };
 
   const handleDarkToggle = () => {

@@ -33,36 +33,125 @@ export const registerAdmin = async (req, res) => {
 /**
  * ✅ Admin Login
  */
+// export const loginAdmin = async (req, res) => {
+//   try {
+//     const { email, password } = req.body;
+//     const admin = await Admin.findOne({ email });
+//     if (!admin) return res.status(404).json({ message: "User not found" });
+
+//     const match = await bcrypt.compare(password, admin.password);
+//     if (!match) return res.status(401).json({ message: "Invalid credentials" });
+
+//     const token = jwt.sign(
+//       {
+//         id: admin._id,
+//         role: admin.role,
+//         isMainAdmin: admin.isMainAdmin,
+//         createdBy: admin.createdBy, // Important for sub-admins
+//       },
+//       jwtSecret,
+//       { expiresIn: "1d" }
+//     );
+
+//     res.json({
+//       token,
+//       role: admin.role,
+//       name: admin.name,
+//       id: admin.id,  // ✅ add this
+
+//       isMainAdmin: admin.isMainAdmin,
+//     });
+//   } catch (error) {
+//     res.status(500).json({ message: "Login error", error: error.message });
+//   }
+// };
+
 export const loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
+
     const admin = await Admin.findOne({ email });
-    if (!admin) return res.status(404).json({ message: "User not found" });
+    if (!admin) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
     const match = await bcrypt.compare(password, admin.password);
-    if (!match) return res.status(401).json({ message: "Invalid credentials" });
+    if (!match) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
 
-    const token = jwt.sign(
+    // -----------------------------------
+    // ACCESS TOKEN (Short Expiry)
+    // -----------------------------------
+    const accessToken = jwt.sign(
       {
         id: admin._id,
         role: admin.role,
         isMainAdmin: admin.isMainAdmin,
-        createdBy: admin.createdBy, // Important for sub-admins
+        createdBy: admin.createdBy,
       },
-      jwtSecret,
-      { expiresIn: "1d" }
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
     );
 
+    // -----------------------------------
+    // REFRESH TOKEN (Long Expiry)
+    // -----------------------------------
+    const refreshToken = jwt.sign(
+      {
+        id: admin._id,
+      },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    // (Optional) Save refresh token in DB for extra security
+    // admin.refreshToken = refreshToken;
+    // await admin.save();
+
     res.json({
-      token,
+      accessToken,
+      refreshToken,
       role: admin.role,
       name: admin.name,
-      id: admin.id,  // ✅ add this
-
+      id: admin._id,
       isMainAdmin: admin.isMainAdmin,
     });
   } catch (error) {
+    console.error("admin login error:", error);
     res.status(500).json({ message: "Login error", error: error.message });
+  }
+};
+
+export const refreshAdminAccessToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({ message: "Refresh token missing" });
+    }
+
+    // Verify refresh token
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    } catch (err) {
+      return res.status(401).json({ message: "Invalid refresh token" });
+    }
+
+    // Create new access token
+    const newAccessToken = jwt.sign(
+      {
+        id: decoded.id,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
+
+    res.json({ accessToken: newAccessToken });
+  } catch (error) {
+    console.error("refreshAdminAccessToken error:", error);
+    return res.status(500).json({ message: "Server error" });
   }
 };
 

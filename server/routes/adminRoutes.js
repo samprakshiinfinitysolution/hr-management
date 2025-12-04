@@ -8,6 +8,7 @@ import {
 import {
   registerAdmin,
   loginAdmin,
+  refreshAdminAccessToken, 
   createEmployee,
   getAdminDashboardData,
   getBirthdays,
@@ -37,7 +38,7 @@ const router = express.Router();
 // Public
 router.post("/register", registerAdmin);
 router.post("/login", loginAdmin);
-
+router.post("/refresh", refreshAdminAccessToken);
 // Protected (any logged-in user)
 router.get("/me", verifyToken, getAdminProfile);
 // Employee CRUD (admin/hr manager)

@@ -22,46 +22,103 @@ function AdminLogin() {
     setSuccess("");
   };
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  // const handleLogin = async (e) => {
+  //   e.preventDefault();
+  //   setLoading(true);
 
-    try {
-      const res = await API.post("/admin/login", form);
-      const { token, role, name, id } = res.data;
+  //   try {
+  //     const res = await API.post("/admin/login", form);
+  //     const { token, role, name, id } = res.data;
 
-      dispatch(
-        loginSuccess({
-          user: { email: form.email, role, name, id },
-          token,
-        })
-      );
+  //     dispatch(
+  //       loginSuccess({
+  //         user: { email: form.email, role, name, id },
+  //         token,
+  //       })
+  //     );
 
-      localStorage.setItem("token", token);
-      localStorage.setItem("role", role.toLowerCase());
-      localStorage.setItem("name", name);
-      localStorage.setItem(
-        "admin",
-        JSON.stringify({ email: form.email, role, name, id })
-      );
+  //     localStorage.setItem("token", token);
+  //     localStorage.setItem("role", role.toLowerCase());
+  //     localStorage.setItem("name", name);
+  //     localStorage.setItem(
+  //       "admin",
+  //       JSON.stringify({ email: form.email, role, name, id })
+  //     );
 
-      setSuccess(res.data.message);
-      setError("");
+  //     setSuccess(res.data.message);
+  //     setError("");
 
-      setTimeout(() => {
-        if (["admin", "hr", "manager"].includes(role.toLowerCase())) {
-          navigate("/admin/dashboard");
-        } else {
-          navigate("/");
-        }
-      }, 100);
-    } catch (err) {
-      setError(err.response?.data?.message || "Login failed. Please try again.");
-      setSuccess("");
-    } finally {
-      setLoading(false);
-    }
-  };
+  //     setTimeout(() => {
+  //       if (["admin", "hr", "manager"].includes(role.toLowerCase())) {
+  //         navigate("/admin/dashboard");
+  //       } else {
+  //         navigate("/");
+  //       }
+  //     }, 100);
+  //   } catch (err) {
+  //     setError(err.response?.data?.message || "Login failed. Please try again.");
+  //     setSuccess("");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
+ const handleLogin = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  setError("");
+  setSuccess("");
+
+  try {
+    const res = await API.post("/admin/login", form);
+    const {
+      accessToken,
+      refreshToken,
+      role,
+      name,
+      id,
+    } = res.data;
+
+    const userData = {
+      id,
+      name,
+      email: form.email,
+      role: role.toLowerCase(),
+    };
+
+    // Redux dispatch
+    dispatch(
+      loginSuccess({
+        user: userData,
+        token: accessToken, // 🔥 Important
+      })
+    );
+
+    // Save tokens & user to storage
+    localStorage.setItem("accessToken", accessToken);
+    localStorage.setItem("refreshToken", refreshToken);
+    localStorage.setItem("role", role.toLowerCase());
+    localStorage.setItem("user", JSON.stringify(userData));
+
+    setSuccess("Login successful");
+
+    setTimeout(() => {
+      if (["admin", "hr", "manager"].includes(role.toLowerCase())) {
+        navigate("/admin/dashboard");
+      } else {
+        navigate("/");
+      }
+    }, 500);
+  } catch (err) {
+    setError(
+      err.response?.data?.message || "Login failed. Please try again."
+    );
+    setSuccess("");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <div className="min-h-screen w-full lg:grid lg:grid-cols-2">

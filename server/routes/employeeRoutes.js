@@ -10,6 +10,7 @@ import {
   getAllAdminsForChat,
   getAllEmployeesForChat,
   getAllEmployeesPublic,
+  refreshEmployeeAccessToken,
 } from "../controllers/employeeController.js";
 
 import { verifyToken, employeeOnly } from "../middleware/authMiddleware.js";
@@ -18,7 +19,7 @@ const router = express.Router();
 
 // 🔹 Public
 router.post("/login", loginEmployee);
-
+router.post("/refresh", refreshEmployeeAccessToken);
 // 🔹 Protected (Employee features)
 router.get("/dashboard", verifyToken, employeeOnly, getEmployeeDashboard);
 router.get("/profile", verifyToken, employeeOnly, getProfile);

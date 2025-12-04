@@ -134,7 +134,7 @@ export default function EmployeeLayout() {
           }
       `}
       >
-        <EmpSidebar isOpen={isSidebarOpen} />
+        <EmpSidebar isOpen={isSidebarOpen} isDarkMode={isDarkMode} />
       </div>
 
       {/* MAIN CONTENT */}

@@ -12,7 +12,7 @@ import {
   Clock,
 } from "lucide-react";
 
-export default function EmpSidebar({ isOpen }) {
+export default function EmpSidebar({ isOpen, isDarkMode }) {
   const menuItems = [
     { name: "Home", icon: <HomeIcon size={20} />, path: "/employee" },
     { name: "Attendance", icon: <Briefcase size={20} />, path: "/employee/attendance" },
@@ -27,9 +27,17 @@ export default function EmpSidebar({ isOpen }) {
   ];
 
   return (
-    <div className={`  shadow-lg h-full flex flex-col gap-4 p-4 transition-all duration-300 ${isOpen ? "w-64" : "w-20"}`}>
+    <div
+      className={`shadow-lg h-full flex flex-col gap-4 p-4 transition-all duration-300 ${
+        isOpen ? "w-64" : "w-20"
+      } ${isDarkMode ? "bg-gray-800 text-gray-100" : "bg-white text-gray-900"}`}
+    >
       {/* Header */}
-      <div className={`text-blue-600 dark:text-blue-400 text-lg font-bold border-b dark:border-gray-700 pb-2 mt-4 px-2 ${!isOpen && "text-center"}`}>
+      <div
+        className={`text-lg font-bold pb-2 mt-4 px-2 ${
+          isDarkMode ? "text-blue-400 border-gray-700" : "text-blue-600 border-gray-200"
+        } border-b ${!isOpen && "text-center"}`}
+      >
         Employee Panel
       </div>
 
@@ -40,8 +48,12 @@ export default function EmpSidebar({ isOpen }) {
             key={item.name}
             to={item.path}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-2 rounded-lg transition-colors duration-200 ${
-                isActive ? "bg-blue-600" : "  hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-white"
+              `flex items-center gap-3 px-4 py-2 rounded-lg transition-colors duration-200 text-md ${
+                isActive
+                  ? "bg-blue-600 text-white"
+                  : isDarkMode
+                  ? "text-gray-300 hover:bg-gray-700 hover:text-white"
+                  : "text-gray-700 hover:bg-gray-100 hover:text-blue-600"
               } ${!isOpen && "justify-center"}`
             }
           >
