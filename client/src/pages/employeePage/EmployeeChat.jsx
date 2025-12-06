@@ -37,22 +37,21 @@ export default function EmployeeChat() {
     setPreviewUrl(url);
     setPreviewType("file");
   };
-  // Load employee ID from user or localStorage
-  useEffect(() => {
-    const storedRaw = localStorage.getItem("employee");
-    const stored = storedRaw ? JSON.parse(storedRaw) : null;
 
-    if (user?._id) {
-      setEmployeeId(user._id);
-      // localStorage.setItem("employee", JSON.stringify(user)); // Removed: localStorage is updated during login
-    } else if (stored?._id) {
-      setEmployeeId(stored._id);
-    }
+  useEffect(() => {
+    const savedUser = JSON.parse(localStorage.getItem("user")) || null;
+    const uid = user?._id || user?.id || savedUser?._id || savedUser?.id || null;
+
+    if (uid) setEmployeeId(uid);
   }, [user]);
 
   // Load users list
   useEffect(() => {
-    const endpoint = chatType === "admin" ? "/admins" : "/employees";
+    const endpoint =
+      chatType === "admin"
+        ? "/chat/admins-for-chat"
+        : "/chat/employees-for-chat";
+
     if (!employeeId) return; // Don't fetch until employeeId is available
 
     setUsers([]);
@@ -78,24 +77,11 @@ export default function EmployeeChat() {
     const roomId = [selectedUser._id, employeeId].sort().join("_");
     socket.emit("joinRoom", roomId);
 
-    socket.on("connect", () => console.log("✅ Socket connected:", socket.id));
-    socket.on("connect_error", (err) =>
-      console.error("❌ Socket connect error:", err.message)
-    );
-    socket.on("disconnect", (reason) =>
-      console.warn("🔴 Socket disconnected:", reason)
-    );
-
     API.get(`/chat/${selectedUser._id}/${employeeId}`)
-      .then((res) => {
-        const sorted = res.data.sort(
-          (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
-        );
-        setMessages(sorted);
-      })
+      .then((res) => setMessages(res.data))
       .catch(() => toast.error("Failed to load messages"));
 
-    // ✅ Handle incoming message and double-check logic
+    // RECEIVE MESSAGE
     socket.on("receiveMessage", (msg) => {
       const validMsg =
         (msg.senderId === selectedUser._id && msg.receiverId === employeeId) ||
@@ -104,26 +90,16 @@ export default function EmployeeChat() {
       if (!validMsg) return;
 
       setMessages((prev) => {
-        const exists = prev.some(
-          (m) =>
-            m._id === msg._id ||
-            (m.message === msg.message &&
-              m.senderId === msg.senderId &&
-              Math.abs(new Date(m.createdAt) - new Date(msg.createdAt)) < 1000)
-        );
-        if (exists) return prev;
-        return [...prev, msg].sort(
-          (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
-        );
+        if (prev.some((m) => m._id === msg._id)) return prev;
+        return [...prev, msg];
       });
 
-      // ✅ Mark delivered immediately if receiver is employee
       if (msg.receiverId === employeeId) {
         socket.emit("confirmDelivered", { messageId: msg._id, room: roomId });
       }
     });
 
-    // ✅ Update ticks when backend confirms delivery/read
+    // DELIVERY + READ
     socket.on("messageDelivered", ({ messageId }) => {
       setMessages((prev) =>
         prev.map((m) => (m._id === messageId ? { ...m, isDelivered: true } : m))
@@ -138,13 +114,35 @@ export default function EmployeeChat() {
       );
     });
 
+    // DELETE FOR EVERYONE
+    socket.on("messageDeletedForEveryone", ({ messageIds }) => {
+      setMessages((prev) => prev.filter((m) => !messageIds.includes(m._id)));
+    });
+
     return () => {
       socket.emit("leaveRoom", roomId);
       socket.off("receiveMessage");
       socket.off("messageDelivered");
       socket.off("messageRead");
+      socket.off("messageDeletedForEveryone");
     };
   }, [selectedUser, employeeId]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleDeleteForEveryone = ({ messageIds }) => {
+      setMessages(prev =>
+        prev.filter(m => !messageIds.includes(m._id))
+      );
+    };
+
+    socket.on("messageDeletedForEveryone", handleDeleteForEveryone);
+
+    return () => {
+      socket.off("messageDeletedForEveryone", handleDeleteForEveryone);
+    };
+  }, []);
 
   // ✅ Auto-scroll & focus
   useEffect(() => {
@@ -175,7 +173,7 @@ export default function EmployeeChat() {
   const sendMessage = async () => {
     if (!message.trim() || !selectedUser || !employeeId) return;
 
-    // 1. Save message to DB via API
+    // 1. Save message to DB
     const { data: finalMsg } = await API.post("/chat", {
       senderId: employeeId,
       receiverId: selectedUser._id,
@@ -183,13 +181,18 @@ export default function EmployeeChat() {
       type: "text",
     });
 
-    // 2. Emit message via socket
-    socket.emit("sendMessage", finalMsg);
+    // 2. Emit message only
+    const roomId = [employeeId, selectedUser._id].sort().join("_");
 
-    // 3. Update UI with the message from the server (which has an _id)
-    setMessages((prev) => [...prev, finalMsg]);
+    socket.emit("sendMessage", {
+      ...finalMsg,
+      room: roomId,
+    });
+
+    // ❌ DO NOT add message manually here (this creates duplicates)
     setMessage("");
   };
+
 
   // ✅ Select message for deletion
   const handleMessageSelect = (messageId) => {
@@ -227,14 +230,11 @@ export default function EmployeeChat() {
     setDeleteTarget({ type: "messages", ids: selectedMessages });
     setShowDeleteModal(true);
   };
-  const handleTextClick = (msgId) => {
-    if (!msgId) return;
-    handleMessageSelect(msgId); // instantly select
+
+  const confirmDeleteChat = () => {
+    setDeleteTarget({ type: "chat" });
+    setShowDeleteModal(true);
   };
-
-
-
-
   // File upload
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
@@ -270,7 +270,13 @@ export default function EmployeeChat() {
       const finalMsg = msgRes.data;
 
       // 3️⃣ Emit socket message
-      socket.emit("sendMessage", finalMsg);
+      const roomId = [employeeId, selectedUser._id].sort().join("_");
+
+      socket.emit("sendMessage", {
+        ...finalMsg,
+        room: roomId,
+      });
+
 
       // 4️⃣ Push in UI
       setMessages(prev => [...prev, finalMsg]);
@@ -287,46 +293,172 @@ export default function EmployeeChat() {
 
 
   // Delete handlers
-  const confirmDeleteMessage = (msgId) => {
-    setDeleteTarget({ type: "message", id: msgId });
-    setShowDeleteModal(true);
-  };
+  //   if (!deleteTarget) return;
+  //   setIsDeleting(true);
 
-  const confirmDeleteChat = () => {
-    setDeleteTarget({ type: "chat" });
-    setShowDeleteModal(true);
-  };
-
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    setIsDeleting(true);
-
-    try {
-      if (deleteTarget.type === "message") {
-        await API.delete(`/chat/message/${deleteTarget.id}`);
-        setMessages((prev) => prev.filter((m) => m._id !== deleteTarget.id));
-        toast.success("Message deleted");
-      } else if (deleteTarget.type === "messages") {
-        await Promise.all(
-          deleteTarget.ids.map(id => API.delete(`/chat/message/${id}`))
-        );
-        setMessages((prev) => prev.filter((m) => !deleteTarget.ids.includes(m._id)));
-        toast.success("Message deleted");
-      } else if (deleteTarget.type === "chat" && selectedUser && employeeId) {
-        await API.delete(`/chat/${selectedUser._id}/${employeeId}`);
-        setMessages([]);
-        toast.success("Chat deleted");
-      }
-      setShowDeleteModal(false);
-    } catch {
-      toast.error("Failed to delete");
-    } finally {
-      setIsDeleting(false);
-      setSelectedMessages([]);
-    }
-  };
+  //   try {
+  //     if (deleteTarget.type === "message") {
+  //       await API.delete(`/chat/message/${deleteTarget.id}`);
+  //       setMessages((prev) => prev.filter((m) => m._id !== deleteTarget.id));
+  //       toast.success("Message deleted");
+  //     } else if (deleteTarget.type === "messages") {
+  //       await Promise.all(
+  //         deleteTarget.ids.map(id => API.delete(`/chat/message/${id}`))
+  //       );
+  //       setMessages((prev) => prev.filter((m) => !deleteTarget.ids.includes(m._id)));
+  //       toast.success("Message deleted");
+  //     } else if (deleteTarget.type === "chat" && selectedUser && employeeId) {
+  //       await API.delete(`/chat/${selectedUser._id}/${employeeId}`);
+  //       setMessages([]);
+  //       toast.success("Chat deleted");
+  //     }
+  //     setShowDeleteModal(false);
+  //   } catch {
+  //     toast.error("Failed to delete");
+  //   } finally {
+  //     setIsDeleting(false);
+  //     setSelectedMessages([]);
+  //   }
+  // };
 
   // Group messages
+
+  // const handleDelete = async (scope) => { // scope: 'me' or 'everyone'
+  //   if (!deleteTarget) return;
+  //   setIsDeleting(true);
+
+  //   try {
+  //     const isChatDelete = deleteTarget.type === "chat";
+  //     const isMessageDelete = deleteTarget.type === "messages" || deleteTarget.type === "message";
+  //     const idsToDelete = deleteTarget.type === 'message' ? [deleteTarget.id] : deleteTarget.ids || [];
+
+  //     if (scope === 'everyone') {
+  //       // --- DELETE FOR EVERYONE ---
+  //       if (isMessageDelete) {
+  //         await API.post('/chat/messages/delete-for-everyone', {
+  //           messageIds: idsToDelete,
+  //           user1: employeeId,
+  //           user2: selectedUser._id
+  //         });
+  //         toast.success("Deleted for everyone");
+  //       } else if (isChatDelete) {
+  //         await API.delete(`/chat/${selectedUser._id}/${employeeId}`);
+  //         setMessages([]);
+  //         toast.success("Chat deleted for everyone");
+  //       }
+  //     } else {
+  //       // --- DELETE FOR ME (default) ---
+  //       if (isMessageDelete) {
+  //         await Promise.all(
+  //           idsToDelete.map(id => API.delete(`/chat/message/${id}`))
+  //         );
+
+  //         setMessages(prev => prev.filter(m => !idsToDelete.includes(m._id)));
+
+  //         toast.success("Deleted for me");
+  //       } else if (isChatDelete) {
+  //         setMessages([]);
+  //         toast.success("Chat cleared for me");
+  //       }
+  //     }
+
+  //     setShowDeleteModal(false);
+  //   } catch (err) {
+  //     console.error("Delete error:", err);
+  //     toast.error("Failed to perform delete action");
+  //   } finally {
+  //     setIsDeleting(false);
+  //     setSelectedMessages([]);
+  //   }
+  // };
+ const handleDelete = async (scope) => { 
+  if (!deleteTarget) return;
+  setIsDeleting(true);
+
+  try {
+    const isChatDelete = deleteTarget.type === "chat";
+    const isMessageDelete =
+      deleteTarget.type === "messages" || deleteTarget.type === "message";
+
+    const idsToDelete =
+      deleteTarget.type === "message"
+        ? [deleteTarget.id]
+        : deleteTarget.ids || [];
+
+    // -------------------------------------------------------
+    // ⭐ DELETE FOR EVERYONE 
+    // -------------------------------------------------------
+    if (scope === "everyone") {
+      if (isMessageDelete) {
+        await API.post("/chat/messages/delete-for-everyone", {
+          messageIds: idsToDelete,
+          user1: employeeId,
+          user2: selectedUser._id,
+        });
+
+        // remove from UI
+        setMessages((prev) =>
+          prev.filter((m) => !idsToDelete.includes(m._id))
+        );
+
+        toast.success("Deleted for everyone");
+      }
+
+      // delete whole chat globally (optional)
+      else if (isChatDelete) {
+        await API.post("/chat/messages/delete-for-everyone", {
+          messageIds: messages.map((m) => m._id),
+          user1: employeeId,
+          user2: selectedUser._id,
+        });
+
+        setMessages([]);
+        toast.success("Chat deleted for everyone");
+      }
+
+      setShowDeleteModal(false);
+      return;
+    }
+
+    // -------------------------------------------------------
+    // ⭐ DELETE FOR ME (LOCAL ONLY)
+    // -------------------------------------------------------
+    if (scope === "me") {
+      if (isMessageDelete) {
+        // backend call → remove only current user's visibility
+        await Promise.all(
+          idsToDelete.map((msgId) => API.delete(`/chat/message/${msgId}`))
+        );
+
+        // remove only from my UI, other user will still see it
+        setMessages((prev) =>
+          prev.filter((m) => !idsToDelete.includes(m._id))
+        );
+
+        toast.success("Deleted for me");
+      }
+
+      // clear complete chat for only ME
+      else if (isChatDelete) {
+        await API.delete(`/chat/${selectedUser._id}/${employeeId}`);
+
+        setMessages([]);
+        toast.success("Chat cleared for me");
+      }
+    }
+
+    setShowDeleteModal(false);
+  } catch (err) {
+    console.error("Delete error:", err);
+    toast.error("Failed to delete");
+  } finally {
+    setIsDeleting(false);
+    setSelectedMessages([]);
+  }
+};
+
+
+
   const groupedMessages = messages.reduce((groups, msg) => {
     const key = new Date(msg.createdAt).toDateString();
     if (!groups[key]) groups[key] = [];
@@ -349,7 +481,7 @@ export default function EmployeeChat() {
 
   const formatTime = (isoString) =>
     new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-   const getFileName = (m) => {
+  const getFileName = (m) => {
     if (m?.fileName) return m.fileName;
     if (m?.originalName) return m.originalName;
     if (m?.name) return m.name;
@@ -416,12 +548,17 @@ export default function EmployeeChat() {
                   }`}
               >
                 <span
-                  className={`w-2 h-2 rounded-full flex-shrink-0 ${onlineUsers.includes(u._id)
+                  className={`w-2 h-2 rounded-full flex-shrink-0 ${onlineUsers.includes(String(u._id))
                     ? "bg-green-500"
                     : "bg-red-500"
                     }`}
-                  title={onlineUsers.includes(u._id) ? "Online" : "Offline"}
+                  title={
+                    onlineUsers.includes(String(u._id))
+                      ? "Online"
+                      : "Offline"
+                  }
                 ></span>
+
                 <span>{u.name}</span>
               </div>
             ))}
@@ -440,7 +577,6 @@ export default function EmployeeChat() {
       >
         {selectedUser ? (
           <>
-            {/* Chat Header */}
             {selectedMessages.length > 0 ? (
               <div className="p-4 border-b dark:border-gray-700 bg-blue-50 dark:bg-blue-900/50 font-semibold flex justify-between items-center sticky top-0 z-10">
                 <button onClick={() => setSelectedMessages([])} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
@@ -460,7 +596,6 @@ export default function EmployeeChat() {
               </div>
             )}
 
-
             {/* Messages */}
             <div ref={chatBoxRef} className="flex-1 p-4 overflow-y-auto space-y-4">
               {Object.keys(groupedMessages).map((dateKey) => (
@@ -473,106 +608,79 @@ export default function EmployeeChat() {
                       <div
                         key={m._id || i}
                         className={`
-        relative group px-3 py-2 rounded-2xl max-w-[80%] md:max-w-[70%] shadow-sm transition w-fit
-        ${m.senderId === employeeId ? "ml-auto bg-blue-600 text-white rounded-br-sm" : "self-start bg-gray-200 text-black dark:bg-blue-900 dark:text-white rounded-bl-sm"}
-        ${selectedMessages.includes(m._id) ? "bg-blue-400 dark:bg-gray-400" : ""}
-      `}
+                          relative group px-3 py-2 rounded-2xl max-w-[80%] md:max-w-[70%]
+                          shadow-sm transition w-fit
+                          ${m.senderId === employeeId
+                            ? "ml-auto bg-blue-600 text-white rounded-br-sm"
+                            : "self-start bg-gray-200 text-black dark:bg-blue-900 dark:text-white rounded-bl-sm"}
+                          ${selectedMessages.includes(m._id) ? "bg-blue-400 dark:bg-gray-400" : ""}
+                        `}
+                        onMouseDown={() => m.senderId === employeeId && startLongPress(m._id)}
+                        onMouseUp={() => {
+                          const shortClick = endLongPress();
+                          if (shortClick && m.senderId === employeeId) {
+                            handleMessageSelect(m._id);
+                          }
+                        }}
+                        onMouseLeave={() => m.senderId === employeeId && endLongPress()}
                       >
-                        <div className="flex items-end gap-x-2">
+                        {/* TEXT MESSAGE */}
+                        {m.type === "text" && (
+                          <div className="whitespace-pre-wrap break-all">{m.message}</div>
+                        )}
 
-                          {/* ---------- IMAGE ---------- */}
-                          {m.type === "image" ? (
-                            <div className="relative">
-                              <img
-                                src={m.message}
-                                className="max-w-[200px] rounded-lg cursor-pointer"
-                                onMouseDown={() => startLongPress(m._id)}
-                                onMouseUp={(e) => {
-                                  const shortClick = endLongPress();
-                                  if (shortClick) {
-                                    e.stopPropagation();
-                                    onImagePreview(m.message); // modal
-                                  }
-                                }}
-                                onMouseLeave={endLongPress}
-                              />
-                              {/* Timestamp overlay for image */}
-                              <div className="absolute bottom-1 right-1 bg-black/50 text-white rounded px-1.5 py-0.5 text-xs flex items-center gap-1">
-                                <span>{formatTime(m.createdAt)}</span>
-                                {m.senderId === employeeId && (
-                                  <span>
-                                    {m.isRead ? (
-                                      <CheckCheck size={16} className="text-sky-400" />
-                                    ) : m.isDelivered ? (
-                                      <CheckCheck size={16} />
-                                    ) : (
-                                      <Check size={16} />
-                                    )}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                          ) : m.type === "file" ? (
-
-                            /* ---------- PDF / DOC ---------- */
-                            <span
-                              className="
-    break-all flex items-center gap-1 cursor-pointer
-    underline
-    text-inherit
-    decoration-inherit
-    hover:text-inherit
-    hover:decoration-inherit
-  "
-                              onMouseDown={() => startLongPress(m._id)}
-                              onMouseUp={(e) => {
-                                const shortClick = endLongPress();
-                                if (shortClick) {
-                                  e.preventDefault();
-                                  window.open(m.message, "_blank");
+                        {/* IMAGE MESSAGE */}
+                        {m.type === "image" && (
+                          <div className="relative">
+                            <img
+                              src={m.message}
+                              className="max-w-[200px] rounded-lg cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!isLongPress.current) {
+                                  onImagePreview(m.message);
                                 }
                               }}
-                              onMouseLeave={endLongPress}
-                            >
-                              📄 {getFileName(m)}
-                            </span>
+                            />
+                          </div>
+                        )}
 
+                        {/* FILE MESSAGE */}
+                        {m.type === "file" && (
+                          <a
+                            href={m.message}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="break-all flex items-center gap-1 cursor-pointer underline text-inherit decoration-inherit hover:text-inherit hover:decoration-inherit"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isLongPress.current) {
+                                e.preventDefault();
+                              }
+                            }}
+                          >
+                            📄 {getFileName(m)}
+                          </a>
+                        )}
 
-                          ) : (
-
-                            /* ---------- TEXT ---------- */
-                            <div
-                              className="whitespace-pre-wrap break-all"
-                              onClick={() => m.senderId === employeeId && handleMessageSelect(m._id)}
-                            >
-                              {m.message}
-                            </div>
-
-                          )}
-
-                          {/* Time + Ticks for TEXT and FILE messages */}
-                          {m.type !== 'image' && (
-                            <div className="text-xs flex-shrink-0 self-end flex items-center gap-1 opacity-70">
-                              <span>{formatTime(m.createdAt)}</span>
-                              {m.senderId === employeeId && (
-                                <span>
-                                  {m.isRead ? (
-                                    <CheckCheck size={16} className="text-sky-400" />
-                                  ) : m.isDelivered ? (
-                                    <CheckCheck size={16} />
-                                  ) : (
-                                    <Check size={16} />
-                                  )}
-                                </span>
+                        {/* Time & Ticks */}
+                        <div className="text-xs flex-shrink-0 self-end flex items-center gap-1 opacity-70 mt-1 ml-2 float-right">
+                          <span>{formatTime(m.createdAt)}</span>
+                          {m.senderId === employeeId && (
+                            <span>
+                              {m.isRead ? (
+                                <CheckCheck size={16} className="text-sky-400" />
+                              ) : m.isDelivered ? (
+                                <CheckCheck size={16} />
+                              ) : (
+                                <Check size={16} />
                               )}
-                            </div>
+                            </span>
                           )}
                         </div>
                       </div>
                     ))}
                   </div>
-
                 </div>
               ))}
             </div>
@@ -585,44 +693,14 @@ export default function EmployeeChat() {
                   className="p-2 bg-gray-200 dark:bg-gray-700 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 transition"
                   title="Attach file"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={1.8}
-                    stroke="currentColor"
-                    className="w-5 h-5 text-gray-700 dark:text-gray-300"
-                  >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5 text-gray-700 dark:text-gray-300" >
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                   </svg>
                 </button>
-                <input
-                  id="employeeFileInput"
-                  type="file"
-                  accept="image/*,.pdf,.docx,.xlsx"
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
+                <input id="employeeFileInput" type="file" accept="image/*,.pdf,.docx,.xlsx" onChange={handleFileChange} className="hidden" />
               </div>
-
-              <input
-                ref={inputRef}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                  }
-                }}
-                className="flex-1 w-full sm:w-auto min-w-[150px] border border-gray-300 dark:border-gray-700 p-2 rounded-lg text-sm sm:text-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Type a message..."
-              />
-
-              <button
-                onClick={sendMessage}
-                className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-5 py-2 rounded-lg text-sm font-medium transition w-full sm:w-auto"
-              >
+              <input ref={inputRef} value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }} className="flex-1 w-full sm:w-auto min-w-[150px] border border-gray-300 dark:border-gray-700 p-2 rounded-lg text-sm sm:text-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type a message..." />
+              <button onClick={sendMessage} className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-5 py-2 rounded-lg text-sm font-medium transition w-full sm:w-auto" >
                 <span className="sm:hidden">Send Message</span><span className="hidden sm:inline">Send</span>
               </button>
             </div>
@@ -632,11 +710,12 @@ export default function EmployeeChat() {
             Select a {chatType} to start chatting
           </div>
         )}
+
         {/* Full Screen Preview Modal */}
         {previewUrl && previewType === "image" && (
           <div
             className="fixed inset-0 bg-black/85 flex items-center justify-center z-[999]"
-            onClick={() => setPreviewUrl(null)}   // Close when clicking outside
+            onClick={() => setPreviewUrl(null)} // Close when clicking outside
           >
             {/* Close Button */}
             <button
@@ -671,19 +750,37 @@ export default function EmployeeChat() {
                     ? `Delete ${deleteTarget.ids.length} message(s)?`
                     : "Delete entire chat?"}
               </h3>
-              <div className="flex justify-center gap-3 mt-4">
+              <p className="text-sm text-gray-500 mb-4">
+                {deleteTarget?.type === 'messages' && "This will permanently delete the message(s)."}
+              </p>
+              <div className="flex flex-col gap-3 mt-4">
+                <button
+                  onClick={() => handleDelete('me')}
+                  className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-medium"
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? "Deleting..." : `Delete for me`}
+                </button>
+
+                {/* "Delete for Everyone" is only for messages you sent */}
+                {(deleteTarget?.type === 'messages' || deleteTarget?.type === 'chat') && (
+                  <button
+                    onClick={() => handleDelete('everyone')}
+                    className="w-full px-4 py-2 bg-red-800 text-white rounded-lg hover:bg-red-900 transition text-sm font-medium"
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? "Deleting..." : "Delete for everyone"}
+                  </button>
+                )}
+
+                <div className="border-t dark:border-gray-600 my-1"></div>
+
                 <button
                   onClick={() => setShowDeleteModal(false)}
-                  className="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-lg text-sm font-medium"
+                  className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition text-sm"
+                  disabled={isDeleting}
                 >
                   Cancel
-                </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={isDeleting}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium"
-                >
-                  {isDeleting ? "Deleting..." : "Delete"}
                 </button>
               </div>
             </div>

@@ -123,12 +123,12 @@ function AdminLogin() {
   return (
     <div className="min-h-screen w-full lg:grid lg:grid-cols-2">
       {loading && <Loader />}
-      <div className="hidden lg:flex flex-col items-center justify-center bg-gray-800 text-white p-12 text-center">
+      <div className="hidden lg:flex flex-col items-center justify-center  p-12 text-center">
         <h1 className="text-4xl font-bold mb-4">HR Management System</h1>
-        <p className="text-lg text-gray-300">
+        <p className="text-lg ">
           Streamlining your workforce management.
         </p>
-        <div className="mt-8 w-full max-w-xs h-74 bg-gray-700 rounded-lg">
+        <div className="mt-8 w-full max-w-xs h-74  rounded-lg">
           <img src={adminLoginImage} alt="Admin login" className="w-full h-full object-cover rounded-lg" />
         </div>
       </div>

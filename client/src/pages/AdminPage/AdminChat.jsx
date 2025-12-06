@@ -29,35 +29,67 @@ export default function AdminChat() {
   const isLongPress = useRef(false);
 
   // ✅ Load Admin ID
-  useEffect(() => {
-    const storedRaw = localStorage.getItem("admin");
-    const stored = storedRaw ? JSON.parse(storedRaw) : null;
+  // useEffect(() => {
+  //   const storedRaw = localStorage.getItem("admin");
+  //   const stored = storedRaw ? JSON.parse(storedRaw) : null;
 
-    if (user?.id) {
-      setAdminId(user.id);
-      localStorage.setItem("admin", JSON.stringify(user));
-    } else if (stored?.id) {
-      setAdminId(stored.id);
-    } else {
-      console.warn("⚠️ No admin found (Redux + LocalStorage both empty)");
-    }
+  //   if (user?.id) {
+  //     setAdminId(user.id);
+  //     localStorage.setItem("admin", JSON.stringify(user));
+  //   } else if (stored?.id) {
+  //     setAdminId(stored.id);
+  //   } else {
+  //     console.warn("⚠️ No admin found (Redux + LocalStorage both empty)");
+  //   }
+  // }, [user]);
+
+  useEffect(() => {
+    const savedUser = JSON.parse(localStorage.getItem("user")) || null;
+    const aid = user?.id || user?._id || savedUser?.id || savedUser?._id || null;
+
+    if (aid) setAdminId(aid);
   }, [user]);
 
-  // ✅ Fetch users
+  // // ✅ Fetch users
+  // useEffect(() => {
+  //   const endpoint =
+  //     chatType === "employee" ? "/admin/employees" : "/admin/getAdmins";
+
+  //   if (!endpoint) return;
+
+  //   API.get(endpoint)
+  //     .then((res) => {
+  //       let data = res.data;
+  //       if (adminId) data = res.data.filter((u) => u._id !== adminId);
+  //       setUsers(data);
+  //     })
+  //     .catch(() => toast.error(`Failed to load ${chatType}s`));
+  // }, [chatType, adminId]);
+
+  // ✅ Fetch users (Corrected)
   useEffect(() => {
     const endpoint =
-      chatType === "employee" ? "/admin/employees" : "/admin/getAdmins";
+      chatType === "employee"
+        ? "/chat/employees-for-chat"
+        : "/chat/admins-for-chat";
 
-    if (!endpoint) return;
+    if (!adminId) return;
+
+    setUsers([]);
+    setSelectedUser(null);
 
     API.get(endpoint)
       .then((res) => {
         let data = res.data;
-        if (adminId) data = res.data.filter((u) => u._id !== adminId);
+
+        // remove self entry
+        if (adminId) data = data.filter((u) => u._id !== adminId);
+
         setUsers(data);
       })
       .catch(() => toast.error(`Failed to load ${chatType}s`));
   }, [chatType, adminId]);
+
 
   // ✅ Online users
   useEffect(() => {
@@ -71,6 +103,22 @@ export default function AdminChat() {
   useEffect(() => {
     if (inputRef.current) inputRef.current.focus();
   }, [selectedUser]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleDeleteForEveryone = ({ messageIds }) => {
+      setMessages(prev =>
+        prev.filter(m => !messageIds.includes(m._id))
+      );
+    };
+
+    socket.on("messageDeletedForEveryone", handleDeleteForEveryone);
+
+    return () => {
+      socket.off("messageDeletedForEveryone", handleDeleteForEveryone);
+    };
+  }, []);
 
   // ✅ Join room & listen for messages
   useEffect(() => {
@@ -135,12 +183,18 @@ export default function AdminChat() {
       );
     });
 
-
-
+    // Listen for messages deleted by the other user
+    socket.on("messageDeletedForEveryone", ({ messageIds }) => {
+      setMessages((prev) =>
+        prev.filter((m) => !messageIds.includes(m._id))
+      );
+      toast("A message was deleted.", { icon: "🗑️" });
+    });
     return () => {
       socket.emit("leaveRoom", roomId);
       socket.off("receiveMessage");
       socket.off("messageRead");
+      socket.off("messageDeletedForEveryone");
     };
   }, [selectedUser, adminId]);
 
@@ -166,6 +220,7 @@ export default function AdminChat() {
       socket.emit("confirmRead", { messageIds: unreadIds, room });
     }
   }, [messages, selectedUser, adminId]);
+
 
   // ✅ Send text message
   const sendMessage = async () => {
@@ -286,36 +341,140 @@ export default function AdminChat() {
     setShowDeleteModal(true);
   };
 
-  const handleDelete = async () => {
+  // const handleDelete = async (scope) => { // scope: 'me' or 'everyone'
+  //   if (!deleteTarget) return;
+  //   setIsDeleting(true);
+
+  //   try {
+  //     const isChatDelete = deleteTarget.type === "chat";
+  //     const isMessageDelete = deleteTarget.type === "messages" || deleteTarget.type === "message";
+  //     const idsToDelete = deleteTarget.type === 'message' ? [deleteTarget.id] : deleteTarget.ids || [];
+
+  //     if (scope === 'everyone') {
+  //       // --- DELETE FOR EVERYONE ---
+  //       if (isMessageDelete) {
+  //         await API.post('/chat/messages/delete-for-everyone', { 
+  //           messageIds: idsToDelete,
+  //           user1: adminId,
+  //           user2: selectedUser._id
+  //         });
+  //         setMessages((prev) => prev.filter((m) => !idsToDelete.includes(m._id)));
+  //         toast.success("Deleted for everyone");
+  //       } else if (isChatDelete) {
+  //         await API.delete(`/chat/${selectedUser._id}/${adminId}`);
+  //         setMessages([]);
+  //         toast.success("Chat deleted for everyone");
+  //       }
+  //     } else {
+  //       // --- DELETE FOR ME (default) ---
+  //       if (isMessageDelete) {
+  //         // This just hides the message on the client-side
+  //         setMessages((prev) => prev.filter((m) => !idsToDelete.includes(m._id)));
+  //         toast.success("Deleted for me");
+  //       } else if (isChatDelete) {
+  //         // This just clears the chat on the client-side
+  //         setMessages([]);
+  //         toast.success("Chat cleared for me");
+  //       }
+  //     }
+
+  //     setShowDeleteModal(false);
+  //   } catch (err) {
+  //     console.error("Delete error:", err);
+  //     toast.error("Failed to perform delete action");
+  //   } finally {
+  //     setIsDeleting(false);
+  //     setSelectedMessages([]);
+  //   }
+  // };
+
+  // ✅ Group messages by date
+
+  const handleDelete = async (scope) => { // scope = 'me' or 'everyone'
     if (!deleteTarget) return;
     setIsDeleting(true);
 
     try {
-      if (deleteTarget.type === "message") {
-        await API.delete(`/chat/message/${deleteTarget.id}`);
-        setMessages((prev) => prev.filter((m) => m._id !== deleteTarget.id));
-        toast.success("Message deleted");
-      } else if (deleteTarget.type === "messages") {
-        await Promise.all(
-          deleteTarget.ids.map(id => API.delete(`/chat/message/${id}`))
-        );
-        setMessages((prev) => prev.filter((m) => !deleteTarget.ids.includes(m._id)));
-        toast.success(`${deleteTarget.ids.length} message(s) deleted`);
-      } else if (deleteTarget.type === "chat" && selectedUser && adminId) {
-        await API.delete(`/chat/${selectedUser._id}/${adminId}`);
-        setMessages([]);
-        toast.success("Chat deleted");
+      const isChatDelete = deleteTarget.type === "chat";
+      const isMessageDelete =
+        deleteTarget.type === "messages" || deleteTarget.type === "message";
+
+      const idsToDelete =
+        deleteTarget.type === "message"
+          ? [deleteTarget.id]
+          : deleteTarget.ids || [];
+
+      // ======================================================
+      // ⭐ DELETE FOR EVERYONE
+      // ======================================================
+      if (scope === "everyone") {
+        if (isMessageDelete) {
+          await API.post("/chat/messages/delete-for-everyone", {
+            messageIds: idsToDelete,
+            user1: adminId,
+            user2: selectedUser._id,
+          });
+
+          // remove from UI
+          setMessages((prev) =>
+            prev.filter((m) => !idsToDelete.includes(m._id))
+          );
+
+          toast.success("Deleted for everyone");
+        }
+
+        // Full chat delete for everyone
+        else if (isChatDelete) {
+          await API.post("/chat/messages/delete-for-everyone", {
+            messageIds: messages.map((m) => m._id),
+            user1: adminId,
+            user2: selectedUser._id,
+          });
+
+          setMessages([]);
+          toast.success("Full chat deleted for everyone");
+        }
+
+        setShowDeleteModal(false);
+        return;
       }
+
+      // ======================================================
+      // ⭐ DELETE ONLY FOR ME
+      // ======================================================
+      if (scope === "me") {
+        if (isMessageDelete) {
+          // remove visibility for admin only
+          await Promise.all(
+            idsToDelete.map((id) => API.delete(`/chat/message/${id}`))
+          );
+
+          setMessages((prev) =>
+            prev.filter((m) => !idsToDelete.includes(m._id))
+          );
+
+          toast.success("Deleted for me");
+        }
+
+        else if (isChatDelete) {
+          await API.delete(`/chat/${selectedUser._id}/${adminId}`);
+
+          setMessages([]);
+          toast.success("Chat cleared for me");
+        }
+      }
+
       setShowDeleteModal(false);
-    } catch {
-      toast.error("Failed to delete");
+    } catch (err) {
+      console.error("Delete error:", err);
+      toast.error("Failed to perform delete");
     } finally {
       setIsDeleting(false);
       setSelectedMessages([]);
     }
   };
 
-  // ✅ Group messages by date
+
   const groupedMessages = messages.reduce((groups, msg) => {
     const key = new Date(msg.createdAt).toDateString();
     if (!groups[key]) groups[key] = [];
@@ -412,12 +571,13 @@ export default function AdminChat() {
                   }`}
               >
                 <span
-                  className={`w-2 h-2 rounded-full flex-shrink-0 ${onlineUsers.includes(u._id)
+                  className={`w-2 h-2 rounded-full flex-shrink-0 ${onlineUsers.includes(String(u._id))
                     ? "bg-green-500"
                     : "bg-red-500"
                     }`}
-                  title={onlineUsers.includes(u._id) ? "Online" : "Offline"}
+                  title={onlineUsers.includes(String(u._id)) ? "Online" : "Offline"}
                 ></span>
+
                 <span>{u.name}</span>
               </div>
             ))}
@@ -662,21 +822,39 @@ export default function AdminChat() {
                     ? `Delete ${deleteTarget.ids.length} message(s)?`
                     : "Delete entire chat?"}
               </h3>
-              <div className="flex justify-center gap-3 mt-4">
+              <p className="text-sm text-gray-500 mb-4">
+                {deleteTarget?.type === 'messages' && "You can delete for everyone only within a short time."}
+              </p>
+              <div className="flex flex-col gap-3 mt-4">
+                <button
+                  onClick={() => handleDelete('me')}
+                  className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-medium"
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? "Deleting..." : `Delete for me`}
+                </button>
+
+                {/* "Delete for Everyone" is only for messages you sent */}
+                {(deleteTarget?.type === 'messages' || deleteTarget?.type === 'chat') && (
+                  <button
+                    onClick={() => handleDelete('everyone')}
+                    className="w-full px-4 py-2 bg-red-800 text-white rounded-lg hover:bg-red-900 transition text-sm font-medium"
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? "Deleting..." : "Delete for everyone"}
+                  </button>
+                )}
+
+                <div className="border-t dark:border-gray-600 my-1"></div>
+
                 <button
                   onClick={() => setShowDeleteModal(false)}
-                  className="px-4 py-2 bg-gray-300 rounded-lg hover:bg-gray-400 transition text-sm"
+                  className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition text-sm"
                   disabled={isDeleting}
                 >
                   Cancel
                 </button>
-                <button
-                  onClick={handleDelete}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm"
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? "Deleting..." : "Delete"}
-                </button>
+
               </div>
             </div>
           </div>

@@ -556,20 +556,91 @@ export const getEmployeeDashboard = async (req, res) => {
 };
 
 // Admin/Employee Chat lists (unchanged)
+// export const getAllAdminsForChat = async (req, res) => {
+//   try {
+//     const admins = await Admin.find().select("_id name email role");
+//     res.json(admins.map(u => ({ ...u.toObject(), userType: 'admin' })));
+//   } catch (error) {
+//     console.error("getAllAdminsForChat error:", error);
+//     res.status(500).json({ message: "Failed to load admins" });
+//   }
+// };
 export const getAllAdminsForChat = async (req, res) => {
   try {
-    const admins = await Admin.find().select("_id name email role");
-    res.json(admins.map(u => ({ ...u.toObject(), userType: 'admin' })));
+    const user = req.user;
+    let admins = [];
+
+    if (user.role === "superAdmin") {
+      admins = await Admin.find().select("_id name email role createdBy");
+    }
+
+    else if (user.role === "admin") {
+      admins = await Admin.find({ createdBy: user.id })
+        .select("_id name email role createdBy");
+    }
+
+    else if (user.role === "hr" || user.role === "manager") {
+      admins = await Admin.find({ _id: user.createdBy })
+        .select("_id name email role createdBy");
+    }
+
+    else if (user.role === "employee") {
+      admins = await Admin.find({
+        $or: [
+          { _id: user.createdBy },
+          { createdBy: user.createdBy }
+        ]
+      }).select("_id name email role createdBy");
+    }
+
+    res.json(admins.map(a => ({ ...a.toObject(), userType: "admin" })));
+
   } catch (error) {
     console.error("getAllAdminsForChat error:", error);
     res.status(500).json({ message: "Failed to load admins" });
   }
 };
 
+
+// export const getAllEmployeesForChat = async (req, res) => {
+//   try {
+//     const employees = await Employee.find().select("_id name email position");
+//     res.json(employees.map(u => ({ ...u.toObject(), userType: 'employee' })));
+//   } catch (error) {
+//     console.error("getAllEmployeesForChat error:", error);
+//     res.status(500).json({ message: "Failed to load employees" });
+//   }
+// };
+
 export const getAllEmployeesForChat = async (req, res) => {
   try {
-    const employees = await Employee.find().select("_id name email position");
-    res.json(employees.map(u => ({ ...u.toObject(), userType: 'employee' })));
+    const user = req.user;
+
+    let employees = [];
+
+    if (user.role === "superAdmin") {
+      employees = await Employee.find().select("_id name email position createdBy");
+    }
+
+    else if (user.role === "admin") {
+      employees = await Employee.find({ createdBy: user.id })
+        .select("_id name email position createdBy");
+    }
+
+    else if (user.role === "hr" || user.role === "manager") {
+      employees = await Employee.find({ createdBy: user.createdBy })
+        .select("_id name email position createdBy");
+    }
+
+    else if (user.role === "employee") {
+      employees = await Employee.find({
+        createdBy: user.createdBy,
+        _id: { $ne: user.id },
+      }).select("_id name email position createdBy");
+    }
+
+    res.json(employees.map(e => ({ ...e.toObject(), userType: "employee" })));
+
   } catch (error) {
     console.error("getAllEmployeesForChat error:", error);
     res.status(500).json({ message: "Failed to load employees" });

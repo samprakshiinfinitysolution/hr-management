@@ -144,6 +144,13 @@ export default function EmpAttendance() {
         recordMap[d] = r;
       });
 
+      // Add empty days for the start of the month
+      const firstDayOfMonth = start.getDay(); // 0 for Sunday, 1 for Monday, etc.
+      for (let i = 0; i < firstDayOfMonth; i++) {
+        formatted.push({ empty: true });
+      }
+
+
       for (let i = 1; i <= end.getDate(); i++) {
         const currentDate = new Date(start.getFullYear(), start.getMonth(), i);
         const dayStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
@@ -186,8 +193,9 @@ export default function EmpAttendance() {
     }
   };
 
-
   // Dynamic remark logic based on admin settings
+  
+  
   const getRemark = (login, logout, settings) => {
     if (!login || !logout) return "Incomplete";
 
@@ -634,11 +642,11 @@ export default function EmpAttendance() {
 
         {showCalendarModal && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-gray-900 text-black dark:text-white w-full max-w-5xl rounded-xl p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="bg-white dark:bg-gray-900 text-black dark:text-white w-full max-w-5xl rounded-xl p-4 sm:p-6 shadow-xl max-h-[90vh] overflow-y-auto">
 
               {/* Header */}
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-bold">
+                <h2 className="text-xl sm:text-2xl font-bold">
                   Attendance — {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
                 </h2>
                 <button onClick={() => setShowCalendarModal(false)} className="hover:text-red-800 text-red-500 cursor-pointer" >
@@ -647,7 +655,7 @@ export default function EmpAttendance() {
               </div>
 
               {/* Month Nav */}
-              <div className="flex gap-4 mb-4">
+              <div className="flex flex-wrap gap-2 sm:gap-4 mb-4">
                 <button
                   onClick={() => {
                     const m = new Date(currentMonth);
@@ -655,7 +663,7 @@ export default function EmpAttendance() {
                     setCurrentMonth(m);
                     fetchMonthAttendance(m);
                   }}
-                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg"
+                  className="px-3 sm:px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm sm:text-base"
                 >
                   ← Previous Month
                 </button>
@@ -667,16 +675,31 @@ export default function EmpAttendance() {
                     setCurrentMonth(m);
                     fetchMonthAttendance(m);
                   }}
-                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg"
+                  className="px-3 sm:px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm sm:text-base"
                 >
                   Next Month →
                 </button>
               </div>
 
+              {/* Weekday Headers */}
+              <div className="grid grid-cols-7 gap-1 sm:gap-3 mb-2 text-center text-xs sm:text-sm font-semibold text-gray-500">
+                <div className="text-red-500">Sun</div>
+                <div>Mon</div>
+                <div>Tue</div>
+                <div>Wed</div>
+                <div>Thu</div>
+                <div>Fri</div>
+                <div>Sat</div>
+              </div>
+
               {/* Calendar Grid */}
-              <div className="grid grid-cols-7 gap-3 mt-4">
+              <div className="grid grid-cols-7 gap-1 sm:gap-3">
 
                 {monthData.map((day, idx) => {
+                  if (day.empty) {
+                    return <div key={idx} />;
+                  }
+
                   const isSunday = day.status === "Sunday";
                   const statusColor = isSunday
                     ? "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400"
@@ -689,11 +712,11 @@ export default function EmpAttendance() {
                   return (
                     <div
                       key={idx}
-                      className={`p-3 rounded-lg border cursor-pointer hover:bg-blue-100 dark:hover:bg-gray-700 ${isSunday ? 'border-red-300 dark:border-red-700' : 'border-gray-200 dark:border-gray-600'}`}
+                      className={`p-1 sm:p-3 rounded-lg border cursor-pointer hover:bg-blue-100 dark:hover:bg-gray-700 ${isSunday ? 'border-red-300 dark:border-red-700' : 'border-gray-200 dark:border-gray-600'}`}
                       onClick={() => setSelectedDay(day)}
                     >
-                      <p className={`font-bold text-center text-lg ${isSunday ? 'text-red-500' : ''}`}>{day.date.split("-")[2]}</p>
-                      <p className={`text-xs text-center mt-1 px-1 rounded ${statusColor}`}>
+                      <p className={`font-bold text-center text-base sm:text-lg ${isSunday ? 'text-red-500' : ''}`}>{day.date.split("-")[2]}</p>
+                      <p className={`text-[10px] sm:text-xs text-center mt-1 px-1 rounded ${statusColor}`}>
                         {day.status}
                       </p>
                     </div>
@@ -704,13 +727,15 @@ export default function EmpAttendance() {
 
               {/* Selected Day Details */}
               {selectedDay && (
-                <div className="mt-6 p-4 rounded-lg border bg-gray-50 dark:bg-gray-800">
-                  <h3 className="text-xl font-semibold mb-2">
+                <div className="mt-6 p-4 rounded-lg border bg-gray-50 dark:bg-gray-800/50 dark:border-gray-700">
+                  <h3 className="text-lg sm:text-xl font-semibold mb-2">
                     Details for {selectedDay.date}
                   </h3>
 
-                  <p><strong>Login:</strong> {selectedDay.login}</p>
-                  <p><strong>Logout:</strong> {selectedDay.logout}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm sm:text-base">
+                    <p><strong>Login:</strong> {selectedDay.login}</p>
+                    <p><strong>Logout:</strong> {selectedDay.logout}</p>
+                  </div>
 
                   <h4 className="mt-3 font-bold">Breaks:</h4>
 
@@ -732,7 +757,7 @@ export default function EmpAttendance() {
               )}
 
               {/* Summary */}
-              <div className="mt-6 grid grid-cols-5 gap-3 text-center text-sm font-semibold">
+              <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3 text-center text-xs sm:text-sm font-semibold">
                 <div className="bg-green-200 text-green-800 p-2 rounded-lg">Present: {summary.present}</div>
                 <div className="bg-yellow-200 text-yellow-800 p-2 rounded-lg">Late: {summary.late}</div>
                 <div className="bg-red-200 text-red-800 p-2 rounded-lg">Half Day: {summary.half}</div>
