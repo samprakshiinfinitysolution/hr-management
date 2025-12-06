@@ -24,6 +24,7 @@ import chatRoutes from "./routes/chatRoutes.js";
 import policyRoutes from "./routes/policyRoutes.js";
 import eodRoutes from "./routes/eodRoutes.js";
 import eodTemplateRoutes from "./routes/eodTemplateRoutes.js";
+import salaryRuleRoutes from "./routes/salaryRuleRoutes.js";
 dotenv.config();
 
 const app = express();
@@ -85,17 +86,25 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/policies", policyRoutes);
 app.use("/api/eod", eodRoutes);
 app.use("/eod-template", eodTemplateRoutes);
+app.use("/api/salary-rules", salaryRuleRoutes);
 app.use("/api", employeeRoutes); 
 
 // Run auto-checkout every 1 minute
-cron.schedule("*/1 * * * *", () => {
-  console.log("⏳ Auto-checkout checking...");
-  autoCheckOut();
-});
+cron.schedule(
+  "*/1 * * * *",
+  () => {
+    // console.log("⏳ Auto-checkout checking...");
+    autoCheckOut();
+  },
+  {
+    timezone: "Asia/Kolkata",   
+  }
+);
+
 app.get("/", (req, res) => {
   res.send("✅ HR Management Backend Running Successfully!");
 });
-
+app.set("io", io);
 // ✅ Start server
 const PORT = process.env.PORT || port || 5002;
 httpServer.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

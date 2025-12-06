@@ -72,10 +72,24 @@ export default function AdminNavbar({ toggleSidebar }) {
     }
   };
 
+  // const handleLogout = () => {
+  //   toast.success("Logout successfully");
+  //   localStorage.clear();
+  //   navigate("/");
+  // };
+
   const handleLogout = () => {
     toast.success("Logout successfully");
-    localStorage.clear();
-    navigate("/");
+
+    // Remove only auth related keys (safe logout)
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("user");
+    localStorage.removeItem("role");
+
+    // Force reset redux + routing
+    navigate("/", { replace: true });
+    window.location.reload(); // 🔥 Important: Clears leftover redux state
   };
 
   const handleDarkToggle = () => {

@@ -17,7 +17,7 @@ export default function AdminLeaveManagement() {
 
   const fetchLeaves = async () => {
     try {
-      const res = await API.get("/leave?month=" + (new Date().getMonth() + 1) + "&year=" + new Date().getFullYear());
+      const res = await API.get("/leave");
       setLeaves(res.data);
 
       // Calculate summary

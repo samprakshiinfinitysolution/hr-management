@@ -124,7 +124,8 @@ export default function AdminEmpManagement() {
   };
 
   const handleEdit = (emp) => {
-    setForm(emp);
+    // Clear password when loading employee data into the form for editing
+    setForm({ ...emp, password: "" });
     setEditingId(emp._id);
     setDropdownId(null);
   };
@@ -223,7 +224,7 @@ export default function AdminEmpManagement() {
   <input
     type="password"
     name="password"
-    placeholder="Password"
+    placeholder={editingId ? "New Password (leave blank to keep old)" : "Password"}
     value={form.password}
     onChange={handleChange}
     className={`border p-2 rounded-md ${

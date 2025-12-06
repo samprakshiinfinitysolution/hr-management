@@ -10,28 +10,119 @@ import Attendance from "../models/attendanceModel.js"; // if used
 // ... other imports if required
 
 // LOGIN EMPLOYEE
+// export const loginEmployee = async (req, res) => {
+//   try {
+//     const { email, password } = req.body;
+//     const employee = await Employee.findOne({ email: email.toLowerCase() });
+//     if (!employee) return res.status(400).json({ message: "Employee not found" });
+
+//     const isMatch = await bcrypt.compare(password, employee.password);
+//     if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
+
+//     const token = jwt.sign({
+//       id: employee._id,
+//       role: "employee",
+//       adminId: employee.createdBy || employee.adminId,
+//     }, jwtSecret, { expiresIn: "7d" });
+
+//     res.json({
+//       token,
+//       employee: { _id: employee._id, name: employee.name, email, adminId: employee.createdBy || employee.adminId },
+//     });
+//   } catch (error) {
+//     console.error("loginEmployee error:", error);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
+
 export const loginEmployee = async (req, res) => {
   try {
     const { email, password } = req.body;
+
     const employee = await Employee.findOne({ email: email.toLowerCase() });
-    if (!employee) return res.status(400).json({ message: "Employee not found" });
+    if (!employee) {
+      return res.status(400).json({ message: "Employee not found" });
+    }
 
     const isMatch = await bcrypt.compare(password, employee.password);
-    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
 
-    const token = jwt.sign({
-      id: employee._id,
-      role: "employee",
-      adminId: employee.createdBy || employee.adminId,
-    }, jwtSecret, { expiresIn: "7d" });
+    // -------------------------------
+    // ACCESS TOKEN (Short Expiry)
+    // -------------------------------
+    const accessToken = jwt.sign(
+      {
+        id: employee._id,
+        role: "employee",
+        adminId: employee.createdBy || employee.adminId,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" } // short life
+    );
+
+    // -------------------------------
+    // REFRESH TOKEN (Long Expiry)
+    // -------------------------------
+    const refreshToken = jwt.sign(
+      {
+        id: employee._id,
+      },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    // If you want, you can store refresh token in DB for extra security
+    // employee.refreshToken = refreshToken;
+    // await employee.save();
 
     res.json({
-      token,
-      employee: { _id: employee._id, name: employee.name, email, adminId: employee.createdBy || employee.adminId },
+      accessToken,
+      refreshToken,
+      employee: {
+        _id: employee._id,
+        name: employee.name,
+        email: employee.email,
+        adminId: employee.createdBy || employee.adminId,
+      },
     });
   } catch (error) {
     console.error("loginEmployee error:", error);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const refreshEmployeeAccessToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({ message: "Refresh token missing" });
+    }
+
+    // Verify refresh token
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    } catch (err) {
+      return res.status(401).json({ message: "Invalid refresh token" });
+    }
+
+    // Create new access token
+    const newAccessToken = jwt.sign(
+      {
+        id: decoded.id,
+        role: "employee",
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
+
+    res.json({ accessToken: newAccessToken });
+  } catch (error) {
+    console.error("refreshEmployeeAccessToken error:", error);
+    return res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -465,20 +556,91 @@ export const getEmployeeDashboard = async (req, res) => {
 };
 
 // Admin/Employee Chat lists (unchanged)
+// export const getAllAdminsForChat = async (req, res) => {
+//   try {
+//     const admins = await Admin.find().select("_id name email role");
+//     res.json(admins.map(u => ({ ...u.toObject(), userType: 'admin' })));
+//   } catch (error) {
+//     console.error("getAllAdminsForChat error:", error);
+//     res.status(500).json({ message: "Failed to load admins" });
+//   }
+// };
 export const getAllAdminsForChat = async (req, res) => {
   try {
-    const admins = await Admin.find().select("_id name email role");
-    res.json(admins.map(u => ({ ...u.toObject(), userType: 'admin' })));
+    const user = req.user;
+    let admins = [];
+
+    if (user.role === "superAdmin") {
+      admins = await Admin.find().select("_id name email role createdBy");
+    }
+
+    else if (user.role === "admin") {
+      admins = await Admin.find({ createdBy: user.id })
+        .select("_id name email role createdBy");
+    }
+
+    else if (user.role === "hr" || user.role === "manager") {
+      admins = await Admin.find({ _id: user.createdBy })
+        .select("_id name email role createdBy");
+    }
+
+    else if (user.role === "employee") {
+      admins = await Admin.find({
+        $or: [
+          { _id: user.createdBy },
+          { createdBy: user.createdBy }
+        ]
+      }).select("_id name email role createdBy");
+    }
+
+    res.json(admins.map(a => ({ ...a.toObject(), userType: "admin" })));
+
   } catch (error) {
     console.error("getAllAdminsForChat error:", error);
     res.status(500).json({ message: "Failed to load admins" });
   }
 };
 
+
+// export const getAllEmployeesForChat = async (req, res) => {
+//   try {
+//     const employees = await Employee.find().select("_id name email position");
+//     res.json(employees.map(u => ({ ...u.toObject(), userType: 'employee' })));
+//   } catch (error) {
+//     console.error("getAllEmployeesForChat error:", error);
+//     res.status(500).json({ message: "Failed to load employees" });
+//   }
+// };
+
 export const getAllEmployeesForChat = async (req, res) => {
   try {
-    const employees = await Employee.find().select("_id name email position");
-    res.json(employees.map(u => ({ ...u.toObject(), userType: 'employee' })));
+    const user = req.user;
+
+    let employees = [];
+
+    if (user.role === "superAdmin") {
+      employees = await Employee.find().select("_id name email position createdBy");
+    }
+
+    else if (user.role === "admin") {
+      employees = await Employee.find({ createdBy: user.id })
+        .select("_id name email position createdBy");
+    }
+
+    else if (user.role === "hr" || user.role === "manager") {
+      employees = await Employee.find({ createdBy: user.createdBy })
+        .select("_id name email position createdBy");
+    }
+
+    else if (user.role === "employee") {
+      employees = await Employee.find({
+        createdBy: user.createdBy,
+        _id: { $ne: user.id },
+      }).select("_id name email position createdBy");
+    }
+
+    res.json(employees.map(e => ({ ...e.toObject(), userType: "employee" })));
+
   } catch (error) {
     console.error("getAllEmployeesForChat error:", error);
     res.status(500).json({ message: "Failed to load employees" });

@@ -23,6 +23,38 @@ function EmployeeLogin() {
     setSuccess("");
   };
 
+  // const handleLogin = async (e) => {
+  //   e.preventDefault();
+  //   setError("");
+  //   setSuccess("");
+  //   setLoading(true);
+
+  //   try {
+  //     const res = await API.post("/login", form);
+  //     const { token, employee } = res.data;
+
+  //     dispatch(
+  //       loginSuccess({
+  //         user: { _id: employee._id, name: employee.name, email: employee.email, role: "employee" }, // Include _id
+  //         token,
+  //       })
+  //     );
+
+  //     localStorage.setItem("token", token);
+  //     localStorage.setItem("role", "employee");
+  //     setSuccess("Login successful");
+
+  //     setTimeout(() => {
+  //       navigate("/employee");
+  //       setForm({ email: "", password: "" });
+  //     }, 1000);
+  //   } catch (err) {
+  //     setError(err.response?.data?.message || "Login failed. Please try again.");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
@@ -31,39 +63,54 @@ function EmployeeLogin() {
 
     try {
       const res = await API.post("/login", form);
-      const { token, employee } = res.data;
+      const { accessToken, refreshToken, employee } = res.data;
 
+      const userData = {
+        id: employee._id,
+        name: employee.name,
+        email: employee.email,
+        role: "employee",
+      };
+
+      // Redux dispatch
       dispatch(
         loginSuccess({
-          user: { _id: employee._id, name: employee.name, email: employee.email, role: "employee" }, // Include _id
-          token,
+          user: userData,
+          token: accessToken, // 🔥 Important
         })
       );
 
-      localStorage.setItem("token", token);
+      // Save tokens & user
+      localStorage.setItem("accessToken", accessToken);
+      localStorage.setItem("refreshToken", refreshToken);
       localStorage.setItem("role", "employee");
+      localStorage.setItem("user", JSON.stringify(userData));
+
       setSuccess("Login successful");
 
       setTimeout(() => {
         navigate("/employee");
         setForm({ email: "", password: "" });
-      }, 1000);
+      }, 800);
     } catch (err) {
-      setError(err.response?.data?.message || "Login failed. Please try again.");
+      setError(
+        err.response?.data?.message || "Login failed. Please try again."
+      );
     } finally {
       setLoading(false);
     }
   };
 
+
   return (
     <div className="min-h-screen w-full lg:grid lg:grid-cols-2">
       {loading && <Loader />}
-      <div className="hidden lg:flex flex-col items-center justify-center bg-gray-800 text-white p-12 text-center">
+      <div className="hidden lg:flex flex-col items-center justify-center  p-12 text-center">
         <h1 className="text-4xl font-bold mb-4">Welcome, Employee!</h1>
-        <p className="text-lg text-gray-300">
+        <p className="text-lg ">
           Access your dashboard, tasks, and attendance records.
         </p>
-        <div className="mt-8 w-full max-w-xs h-74 bg-gray-700 rounded-lg">
+        <div className="mt-8 w-full max-w-xs h-74  rounded-lg">
           <img src={employeeLoginImage} alt="Employee login illustration" className="w-full h-full object-cover rounded-lg" />
         </div>
       </div>

@@ -27,9 +27,9 @@ function AdminRegister() {
 
   return (
     <div className="min-h-screen w-full lg:grid lg:grid-cols-2">
-      <div className="hidden lg:flex flex-col items-center justify-center bg-gray-800 text-white p-12 text-center">
+      <div className="hidden lg:flex flex-col items-center justify-center  p-12 text-center">
         <h1 className="text-4xl font-bold mb-4">Join Our Team</h1>
-        <p className="text-lg text-gray-300">
+        <p className="text-lg ">
           Register as a new administrator to get started.
         </p>
         <div className="mt-8 w-full max-w-xs h-74 bg-gray-700 rounded-lg">
