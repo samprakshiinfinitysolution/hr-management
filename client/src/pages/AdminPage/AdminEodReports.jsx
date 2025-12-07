@@ -305,38 +305,7 @@ export default function AdminEodReports() {
     copy[index][field] = value;
     setEditRows(copy);
   };
-  // const handleDeleteColumn = async (col) => {
-  //   // 1️⃣ UI update immediately
-  //   const filtered = editColumns.filter((c) => c !== col);
-  //   setEditColumns(filtered);
-  //   setTemplateColumns(filtered);
-
-  //   const newRows = editRows.map((r) => {
-  //     const copy = { ...r };
-  //     delete copy[col];
-  //     return copy;
-  //   });
-  //   setEditRows(newRows);
-
-  //   // 2️⃣ Update Global Template Immediately
-  //   try {
-  //     await API.put("/eod/eod-template", { // Corrected endpoint
-  //       columns: filtered,
-  //       rows: templateRows,
-  //     });
-
-  //     // 3️⃣ Re-fetch Template → instant UI update
-  //     await fetchTemplate();
-
-  //     toast.success("Column removed");
-  //   } catch (err) {
-  //     toast.error("Template update failed");
-  //   }
-  // };
-
-
-
-  // Delete row
+  
   const handleDeleteColumn = async (col) => {
     // Remove from template & UI
     const filtered = editColumns.filter((c) => c !== col);

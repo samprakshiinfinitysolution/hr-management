@@ -435,14 +435,6 @@ const handleSubmit = async (e) => {
     const summaryCellRef = XLSX.utils.encode_cell({ r: summaryContentRowIndex, c: 0 });
     const nextDayPlanCellRef = XLSX.utils.encode_cell({ r: nextDayPlanContentRowIndex, c: 0 });
 
-    // The wrap text style is already applied to all cells in the loop above,
-    // so we don't need to apply a separate style here anymore.
-
-    // Note: We don't need to set a fixed row height (`!rows`).
-    // The `wrapText: true` style tells Excel to auto-adjust the row height upon opening the file.
-    // --- END: Merge Cells ---
-
-
     // 4. Add worksheet to the workbook
     XLSX.utils.book_append_sheet(wb, ws, "EOD Report");
 
@@ -552,15 +544,7 @@ const handleSubmit = async (e) => {
         {/* Rows table */}
         <div className="overflow-x-auto mb-6">
           <table className="w-full border dark:border-gray-600">
-            {/* <thead>
-              <tr>
-                <th className="border p-2 text-sm">Time</th>
-                <th className="border p-2 text-sm">Task / Project</th>
-                <th className="border p-2 text-sm">Description</th>
-                <th className="border p-2 text-sm">Status</th>
-                <th className="border p-2 text-sm">Remarks</th>
-              </tr>
-            </thead> */}
+           
             <thead>
               <tr>
                 {columns.map(col => (
@@ -570,78 +554,7 @@ const handleSubmit = async (e) => {
                 ))}
               </tr>
             </thead>
-            {/* <tbody>
-              {rows.map((row, i) => (
-                <tr key={i}>
-                  <td
-                    className={`border p-2 text-sm font-semibold ${row.task.includes("Break") ? "text-gray-500" : ""
-                      }`}
-                  >
-                    {row.time}
-                  </td>
-
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={row.task}
-                      maxLength={50}
-                      onChange={(e) => handleRowChange(i, "task", e.target.value)}
-                      readOnly={formDisabled || row.task.includes("Break")}
-                      className={`w-full p-1 border rounded-sm text-sm ${row.task.includes("Break") ? "bg-gray-300 text-black" : ""
-                        }`}
-                    />
-                  </td>
-                  
-                  <td className="border p-2">
-                    <textarea
-                      value={row.description}
-                      rows={2}
-                      maxLength={200}
-                      onChange={(e) => handleRowChange(i, "description", e.target.value)}
-                      readOnly={formDisabled || row.task.includes("Break")}
-                      className={`w-full p-1 border rounded-sm text-sm resize-y ${row.task.includes("Break") ? "bg-gray-300 text-black" : ""
-                        }`}
-                    />
-                  </td>
-
-                  <td className="border p-2">
-                    <select
-                      value={row.status}
-                      onChange={(e) => handleRowChange(i, "status", e.target.value)}
-                      disabled={formDisabled}
-                      className={`w-full p-1 border rounded-sm text-sm ${getStatusColor(
-                        row.status
-                      )}`}
-                    >
-                      <option value="" className="text-black">
-                        Select
-                      </option>
-                      <option value="Done" className="text-black">
-                        Done
-                      </option>
-                      <option value="Pending" className="text-black">
-                        Pending
-                      </option>
-                      <option value="Working" className="text-black">
-                        Working
-                      </option>
-                    </select>
-                  </td>
-
-                  <td className="border p-2">
-                    <input
-                      type="text"
-                      value={row.remarks}
-                      maxLength={200}
-                      onChange={(e) => handleRowChange(i, "remarks", e.target.value)}
-                      readOnly={formDisabled || row.task.includes("Break")}
-                      className={`w-full p-1 border rounded-sm text-sm ${row.task.includes("Break") ? "bg-gray-300 text-black" : ""
-                        }`}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody> */}
+           
             <tbody>
               {rows.map((row, i) => (
                 <tr key={i}>

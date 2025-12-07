@@ -28,43 +28,12 @@ export default function AdminChat() {
   const longPressTimer = useRef(null);
   const isLongPress = useRef(false);
 
-  // ✅ Load Admin ID
-  // useEffect(() => {
-  //   const storedRaw = localStorage.getItem("admin");
-  //   const stored = storedRaw ? JSON.parse(storedRaw) : null;
-
-  //   if (user?.id) {
-  //     setAdminId(user.id);
-  //     localStorage.setItem("admin", JSON.stringify(user));
-  //   } else if (stored?.id) {
-  //     setAdminId(stored.id);
-  //   } else {
-  //     console.warn("⚠️ No admin found (Redux + LocalStorage both empty)");
-  //   }
-  // }, [user]);
-
   useEffect(() => {
     const savedUser = JSON.parse(localStorage.getItem("user")) || null;
     const aid = user?.id || user?._id || savedUser?.id || savedUser?._id || null;
 
     if (aid) setAdminId(aid);
   }, [user]);
-
-  // // ✅ Fetch users
-  // useEffect(() => {
-  //   const endpoint =
-  //     chatType === "employee" ? "/admin/employees" : "/admin/getAdmins";
-
-  //   if (!endpoint) return;
-
-  //   API.get(endpoint)
-  //     .then((res) => {
-  //       let data = res.data;
-  //       if (adminId) data = res.data.filter((u) => u._id !== adminId);
-  //       setUsers(data);
-  //     })
-  //     .catch(() => toast.error(`Failed to load ${chatType}s`));
-  // }, [chatType, adminId]);
 
   // ✅ Fetch users (Corrected)
   useEffect(() => {
@@ -340,139 +309,91 @@ export default function AdminChat() {
     setDeleteTarget({ type: "chat" });
     setShowDeleteModal(true);
   };
+  const handleDelete = async (scope) => {
+  if (!deleteTarget) return;
+  setIsDeleting(true);
 
-  // const handleDelete = async (scope) => { // scope: 'me' or 'everyone'
-  //   if (!deleteTarget) return;
-  //   setIsDeleting(true);
+  try {
+    const isChatDelete = deleteTarget.type === "chat";
+    const isMessageDelete =
+      deleteTarget.type === "messages" || deleteTarget.type === "message";
 
-  //   try {
-  //     const isChatDelete = deleteTarget.type === "chat";
-  //     const isMessageDelete = deleteTarget.type === "messages" || deleteTarget.type === "message";
-  //     const idsToDelete = deleteTarget.type === 'message' ? [deleteTarget.id] : deleteTarget.ids || [];
+    const idsToDelete =
+      deleteTarget.type === "message"
+        ? [deleteTarget.id]
+        : deleteTarget.ids || [];
 
-  //     if (scope === 'everyone') {
-  //       // --- DELETE FOR EVERYONE ---
-  //       if (isMessageDelete) {
-  //         await API.post('/chat/messages/delete-for-everyone', { 
-  //           messageIds: idsToDelete,
-  //           user1: adminId,
-  //           user2: selectedUser._id
-  //         });
-  //         setMessages((prev) => prev.filter((m) => !idsToDelete.includes(m._id)));
-  //         toast.success("Deleted for everyone");
-  //       } else if (isChatDelete) {
-  //         await API.delete(`/chat/${selectedUser._id}/${adminId}`);
-  //         setMessages([]);
-  //         toast.success("Chat deleted for everyone");
-  //       }
-  //     } else {
-  //       // --- DELETE FOR ME (default) ---
-  //       if (isMessageDelete) {
-  //         // This just hides the message on the client-side
-  //         setMessages((prev) => prev.filter((m) => !idsToDelete.includes(m._id)));
-  //         toast.success("Deleted for me");
-  //       } else if (isChatDelete) {
-  //         // This just clears the chat on the client-side
-  //         setMessages([]);
-  //         toast.success("Chat cleared for me");
-  //       }
-  //     }
+    // ======================================================
+    // ⭐ DELETE FOR EVERYONE
+    // ======================================================
+    if (scope === "everyone") {
+      if (isMessageDelete) {
+        await API.post("/chat/messages/delete-for-everyone", {
+          messageIds: idsToDelete,
+          user1: adminId,
+          user2: selectedUser._id,
+        });
 
-  //     setShowDeleteModal(false);
-  //   } catch (err) {
-  //     console.error("Delete error:", err);
-  //     toast.error("Failed to perform delete action");
-  //   } finally {
-  //     setIsDeleting(false);
-  //     setSelectedMessages([]);
-  //   }
-  // };
+        // remove from UI
+        setMessages((prev) =>
+          prev.filter((m) => !idsToDelete.includes(m._id))
+        );
 
-  // ✅ Group messages by date
-
-  const handleDelete = async (scope) => { // scope = 'me' or 'everyone'
-    if (!deleteTarget) return;
-    setIsDeleting(true);
-
-    try {
-      const isChatDelete = deleteTarget.type === "chat";
-      const isMessageDelete =
-        deleteTarget.type === "messages" || deleteTarget.type === "message";
-
-      const idsToDelete =
-        deleteTarget.type === "message"
-          ? [deleteTarget.id]
-          : deleteTarget.ids || [];
-
-      // ======================================================
-      // ⭐ DELETE FOR EVERYONE
-      // ======================================================
-      if (scope === "everyone") {
-        if (isMessageDelete) {
-          await API.post("/chat/messages/delete-for-everyone", {
-            messageIds: idsToDelete,
-            user1: adminId,
-            user2: selectedUser._id,
-          });
-
-          // remove from UI
-          setMessages((prev) =>
-            prev.filter((m) => !idsToDelete.includes(m._id))
-          );
-
-          toast.success("Deleted for everyone");
-        }
-
-        // Full chat delete for everyone
-        else if (isChatDelete) {
-          await API.post("/chat/messages/delete-for-everyone", {
-            messageIds: messages.map((m) => m._id),
-            user1: adminId,
-            user2: selectedUser._id,
-          });
-
-          setMessages([]);
-          toast.success("Full chat deleted for everyone");
-        }
-
-        setShowDeleteModal(false);
-        return;
+        toast.success("Deleted for everyone");
       }
 
-      // ======================================================
-      // ⭐ DELETE ONLY FOR ME
-      // ======================================================
-      if (scope === "me") {
-        if (isMessageDelete) {
-          // remove visibility for admin only
-          await Promise.all(
-            idsToDelete.map((id) => API.delete(`/chat/message/${id}`))
-          );
+      // Full chat delete for everyone
+      else if (isChatDelete) {
+        await API.post("/chat/messages/delete-for-everyone", {
+          messageIds: messages.map((m) => m._id),
+          user1: adminId,
+          user2: selectedUser._id,
+        });
 
-          setMessages((prev) =>
-            prev.filter((m) => !idsToDelete.includes(m._id))
-          );
-
-          toast.success("Deleted for me");
-        }
-
-        else if (isChatDelete) {
-          await API.delete(`/chat/${selectedUser._id}/${adminId}`);
-
-          setMessages([]);
-          toast.success("Chat cleared for me");
-        }
+        setMessages([]);
+        toast.success("Full chat deleted for everyone");
       }
 
       setShowDeleteModal(false);
-    } catch (err) {
-      console.error("Delete error:", err);
-      toast.error("Failed to perform delete");
-    } finally {
-      setIsDeleting(false);
-      setSelectedMessages([]);
+      return;
     }
-  };
+
+    // ======================================================
+    // ⭐ DELETE ONLY FOR ME (LOCAL DELETE — WhatsApp style)
+    // ======================================================
+    if (scope === "me") {
+      if (isMessageDelete) {
+        await Promise.all(
+          idsToDelete.map((id) => API.delete(`/chat/message/${id}`))
+        );
+
+        setMessages((prev) =>
+          prev.filter((m) => !idsToDelete.includes(m._id))
+        );
+
+        toast.success("Deleted for me");
+      }
+
+      // Full chat delete for me only
+      else if (isChatDelete) {
+        await API.delete(`/chat/${selectedUser._id}/${adminId}`);
+
+        setMessages([]);
+        toast.success("Chat cleared for me");
+      }
+    }
+
+    setShowDeleteModal(false);
+
+  } catch (err) {
+    console.error("Delete error:", err);
+    toast.error("Failed to perform delete");
+  } finally {
+    setIsDeleting(false);
+    setSelectedMessages([]);
+  }
+};
+
 
 
   const groupedMessages = messages.reduce((groups, msg) => {
