@@ -9,31 +9,6 @@ import { jwtSecret } from "../config/config.js";
 import Attendance from "../models/attendanceModel.js"; // if used
 // ... other imports if required
 
-// LOGIN EMPLOYEE
-// export const loginEmployee = async (req, res) => {
-//   try {
-//     const { email, password } = req.body;
-//     const employee = await Employee.findOne({ email: email.toLowerCase() });
-//     if (!employee) return res.status(400).json({ message: "Employee not found" });
-
-//     const isMatch = await bcrypt.compare(password, employee.password);
-//     if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
-
-//     const token = jwt.sign({
-//       id: employee._id,
-//       role: "employee",
-//       adminId: employee.createdBy || employee.adminId,
-//     }, jwtSecret, { expiresIn: "7d" });
-
-//     res.json({
-//       token,
-//       employee: { _id: employee._id, name: employee.name, email, adminId: employee.createdBy || employee.adminId },
-//     });
-//   } catch (error) {
-//     console.error("loginEmployee error:", error);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
 
 export const loginEmployee = async (req, res) => {
   try {
@@ -145,73 +120,6 @@ export const getProfile = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
-
-// UPDATE PROFILE (Employee) -> Submit for Approval (saves to pendingUpdates)
-// export const updateProfile = async (req, res) => {
-//   try {
-//     const employeeId = req.user.id;
-//     const employee = await Employee.findById(employeeId);
-//     if (!employee) return res.status(404).json({ message: "Employee not found" });
-
-//     if ((employee.editCount || 0) >= 2) {
-//       return res.status(403).json({ message: "Profile update limit reached (2 times)" });
-//     }
-
-//     // Allowed canonical field names (standardized)
-//     const allowedFields = [
-//       "name", "email", "phone", "alternateNumber", "address", "highestQualification",
-//       "yearOfPassing", "accountHolder", "accountNumber", "ifsc", "bankName",
-//       "idType", "idNumber", "emergencyName", "emergencyRelation", "emergencyNumber",
-//       "birthday", "image", "contact", "fullName", "department", "jobType", "position"
-//     ];
-
-//     // Accept synonyms from client: map them to canonical names
-//     const aliasMap = {
-//       fullName: "name",
-//       contact: "phone",
-//     };
-
-//     const updates = {};
-//     for (const key of Object.keys(req.body || {})) {
-//       const canonicalKey = aliasMap[key] || key;
-//       if (allowedFields.includes(canonicalKey)) {
-//         updates[canonicalKey] = req.body[key];
-//       }
-//     }
-
-//     if (Object.keys(updates).length === 0) {
-//       // nothing meaningful to update — still allow if image present?
-//       return res.status(400).json({ message: "No valid fields provided for update." });
-//     }
-
-//     // Save as pendingUpdates for admin approval
-//     employee.pendingUpdates = {
-//       ...(employee.pendingUpdates || {}),
-//       ...updates,
-//     };
-//     employee.status = "Pending";
-//     employee.editCount = (employee.editCount || 0) + 1;
-//     await employee.save();
-
-//     // Notify the admin who created this employee. Fallback: notify all main admins if createdBy missing
-//     const notifyTo = employee.createdBy;
-//     if (notifyTo) {
-//       await new Notification({
-//         title: "Profile Update Request",
-//         message: `${employee.name || "An employee"} has requested profile changes.`,
-//         type: "alert",
-//         userId: notifyTo,
-//         link: `/admin/dashboard/employee/${employeeId}`,
-//       }).save();
-//     }
-
-//     return res.json({ message: "Update request sent", employee });
-//   } catch (error) {
-//     console.error("updateProfile error:", error);
-//     res.status(500).json({ message: "Server error", error: error.message });
-//   }
-// };
 
 export const updateProfile = async (req, res) => {
   try {

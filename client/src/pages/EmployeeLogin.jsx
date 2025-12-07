@@ -22,39 +22,6 @@ function EmployeeLogin() {
     setError("");
     setSuccess("");
   };
-
-  // const handleLogin = async (e) => {
-  //   e.preventDefault();
-  //   setError("");
-  //   setSuccess("");
-  //   setLoading(true);
-
-  //   try {
-  //     const res = await API.post("/login", form);
-  //     const { token, employee } = res.data;
-
-  //     dispatch(
-  //       loginSuccess({
-  //         user: { _id: employee._id, name: employee.name, email: employee.email, role: "employee" }, // Include _id
-  //         token,
-  //       })
-  //     );
-
-  //     localStorage.setItem("token", token);
-  //     localStorage.setItem("role", "employee");
-  //     setSuccess("Login successful");
-
-  //     setTimeout(() => {
-  //       navigate("/employee");
-  //       setForm({ email: "", password: "" });
-  //     }, 1000);
-  //   } catch (err) {
-  //     setError(err.response?.data?.message || "Login failed. Please try again.");
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");

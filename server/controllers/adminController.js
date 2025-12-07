@@ -30,42 +30,6 @@ export const registerAdmin = async (req, res) => {
   }
 };
 
-/**
- * ✅ Admin Login
- */
-// export const loginAdmin = async (req, res) => {
-//   try {
-//     const { email, password } = req.body;
-//     const admin = await Admin.findOne({ email });
-//     if (!admin) return res.status(404).json({ message: "User not found" });
-
-//     const match = await bcrypt.compare(password, admin.password);
-//     if (!match) return res.status(401).json({ message: "Invalid credentials" });
-
-//     const token = jwt.sign(
-//       {
-//         id: admin._id,
-//         role: admin.role,
-//         isMainAdmin: admin.isMainAdmin,
-//         createdBy: admin.createdBy, // Important for sub-admins
-//       },
-//       jwtSecret,
-//       { expiresIn: "1d" }
-//     );
-
-//     res.json({
-//       token,
-//       role: admin.role,
-//       name: admin.name,
-//       id: admin.id,  // ✅ add this
-
-//       isMainAdmin: admin.isMainAdmin,
-//     });
-//   } catch (error) {
-//     res.status(500).json({ message: "Login error", error: error.message });
-//   }
-// };
-
 export const loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;

@@ -22,47 +22,6 @@ function AdminLogin() {
     setSuccess("");
   };
 
-  // const handleLogin = async (e) => {
-  //   e.preventDefault();
-  //   setLoading(true);
-
-  //   try {
-  //     const res = await API.post("/admin/login", form);
-  //     const { token, role, name, id } = res.data;
-
-  //     dispatch(
-  //       loginSuccess({
-  //         user: { email: form.email, role, name, id },
-  //         token,
-  //       })
-  //     );
-
-  //     localStorage.setItem("token", token);
-  //     localStorage.setItem("role", role.toLowerCase());
-  //     localStorage.setItem("name", name);
-  //     localStorage.setItem(
-  //       "admin",
-  //       JSON.stringify({ email: form.email, role, name, id })
-  //     );
-
-  //     setSuccess(res.data.message);
-  //     setError("");
-
-  //     setTimeout(() => {
-  //       if (["admin", "hr", "manager"].includes(role.toLowerCase())) {
-  //         navigate("/admin/dashboard");
-  //       } else {
-  //         navigate("/");
-  //       }
-  //     }, 100);
-  //   } catch (err) {
-  //     setError(err.response?.data?.message || "Login failed. Please try again.");
-  //     setSuccess("");
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-
  const handleLogin = async (e) => {
   e.preventDefault();
   setLoading(true);
