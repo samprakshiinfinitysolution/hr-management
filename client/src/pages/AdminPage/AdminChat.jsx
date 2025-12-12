@@ -310,89 +310,79 @@ export default function AdminChat() {
     setShowDeleteModal(true);
   };
   const handleDelete = async (scope) => {
-  if (!deleteTarget) return;
-  setIsDeleting(true);
+    if (!deleteTarget) return;
+    setIsDeleting(true);
 
-  try {
-    const isChatDelete = deleteTarget.type === "chat";
-    const isMessageDelete =
-      deleteTarget.type === "messages" || deleteTarget.type === "message";
+    try {
+      const isChatDelete = deleteTarget.type === "chat";
+      const isMessageDelete =
+        deleteTarget.type === "messages" || deleteTarget.type === "message";
 
-    const idsToDelete =
-      deleteTarget.type === "message"
-        ? [deleteTarget.id]
-        : deleteTarget.ids || [];
+      const idsToDelete =
+        deleteTarget.type === "message"
+          ? [deleteTarget.id]
+          : deleteTarget.ids || [];
 
-    // ======================================================
-    // ⭐ DELETE FOR EVERYONE
-    // ======================================================
-    if (scope === "everyone") {
-      if (isMessageDelete) {
-        await API.post("/chat/messages/delete-for-everyone", {
-          messageIds: idsToDelete,
-          user1: adminId,
-          user2: selectedUser._id,
-        });
+      // ======================================================
+      // ⭐ DELETE FOR EVERYONE
+      // ======================================================
+      if (scope === "everyone") {
+        if (isMessageDelete) {
+          await API.post("/chat/messages/delete-for-everyone", {
+            messageIds: idsToDelete,
+            user1: adminId,
+            user2: selectedUser._id,
+          });
 
-        // remove from UI
-        setMessages((prev) =>
-          prev.filter((m) => !idsToDelete.includes(m._id))
-        );
+          // remove from UI
+          setMessages((prev) =>
+            prev.filter((m) => !idsToDelete.includes(m._id))
+          );
 
-        toast.success("Deleted for everyone");
+          toast.success("Deleted for everyone");
+        }
       }
 
-      // Full chat delete for everyone
-      else if (isChatDelete) {
-        await API.post("/chat/messages/delete-for-everyone", {
-          messageIds: messages.map((m) => m._id),
-          user1: adminId,
-          user2: selectedUser._id,
-        });
+      // ======================================================
+      // ⭐ DELETE ONLY FOR ME (LOCAL DELETE — WhatsApp style)
+      // ======================================================
+      if (scope === "me") {
+        if (isMessageDelete) {
+          await Promise.all(
+            idsToDelete.map((id) => API.delete(`/chat/message/${id}`))
+          );
 
-        setMessages([]);
-        toast.success("Full chat deleted for everyone");
+          setMessages((prev) =>
+            prev.filter((m) => !idsToDelete.includes(m._id))
+          );
+
+          toast.success("Deleted for me");
+        }
+
+        // Full chat delete for me only
+        else if (isChatDelete) {
+          // await API.delete(`/chat/${selectedUser._id}/${adminId}`);
+
+          // setMessages([]);
+          // toast.success("Chat cleared for me");
+
+          await API.delete(`/chat/clear-for-me/${selectedUser._id}`);
+          setMessages([]);
+          toast.success("Chat cleared for you");
+
+        }
       }
 
       setShowDeleteModal(false);
-      return;
+
+    } catch (err) {
+      console.error("Delete error:", err);
+      toast.error("Failed to perform delete");
+    } finally {
+      setIsDeleting(false);
+      setSelectedMessages([]);
     }
-
-    // ======================================================
-    // ⭐ DELETE ONLY FOR ME (LOCAL DELETE — WhatsApp style)
-    // ======================================================
-    if (scope === "me") {
-      if (isMessageDelete) {
-        await Promise.all(
-          idsToDelete.map((id) => API.delete(`/chat/message/${id}`))
-        );
-
-        setMessages((prev) =>
-          prev.filter((m) => !idsToDelete.includes(m._id))
-        );
-
-        toast.success("Deleted for me");
-      }
-
-      // Full chat delete for me only
-      else if (isChatDelete) {
-        await API.delete(`/chat/${selectedUser._id}/${adminId}`);
-
-        setMessages([]);
-        toast.success("Chat cleared for me");
-      }
-    }
-
-    setShowDeleteModal(false);
-
-  } catch (err) {
-    console.error("Delete error:", err);
-    toast.error("Failed to perform delete");
-  } finally {
-    setIsDeleting(false);
-    setSelectedMessages([]);
-  }
-};
+  };
 
 
 
@@ -518,7 +508,7 @@ export default function AdminChat() {
         {selectedUser ? (
           <>
             {selectedMessages.length > 0 ? (
-              <div className="p-4 border-b dark:border-gray-700 bg-blue-50 dark:bg-blue-900/50 font-semibold flex justify-between items-center sticky top-0 z-10">
+              <div className="p-4 border-b dark:border-gray-700 bg-gray-300 text-black font-semibold flex justify-between items-center sticky top-0 z-10">
                 <button onClick={() => setSelectedMessages([])} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
                   <X size={20} />
                 </button>
@@ -531,7 +521,7 @@ export default function AdminChat() {
               <div className="p-4 border-b dark:border-gray-700 font-semibold text-blue-600 flex justify-between items-center sticky top-0 z-10">
                 <span>Chat with {selectedUser.name}</span>
                 <button onClick={confirmDeleteChat} className="text-red-600 hover:text-red-800 flex items-center gap-1 text-sm">
-                  <Trash2 size={18} /> Delete Chat
+                  <Trash2 size={18} /> Clear All Chat
                 </button>
               </div>
             )}
@@ -740,11 +730,11 @@ export default function AdminChat() {
                 {deleteTarget?.type === "message"
                   ? "Delete this message?"
                   : deleteTarget?.type === "messages"
-                    ? `Delete ${deleteTarget.ids.length} message(s)?`
-                    : "Delete entire chat?"}
+                    ? `Delete ${deleteTarget.ids.length} message(s)?` // This is for selected messages
+                    : "Clear All Chats?"}
               </h3>
-              <p className="text-sm text-gray-500 mb-4">
-                {deleteTarget?.type === 'messages' && "You can delete for everyone only within a short time."}
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                {deleteTarget?.type === 'messages' && "This will permanently delete the message(s)."}
               </p>
               <div className="flex flex-col gap-3 mt-4">
                 <button
@@ -752,11 +742,11 @@ export default function AdminChat() {
                   className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-medium"
                   disabled={isDeleting}
                 >
-                  {isDeleting ? "Deleting..." : `Delete for me`}
+                  {isDeleting ? "Processing..." : (deleteTarget?.type === 'chat' ? 'Clear for me' : 'Delete for me')}
                 </button>
 
                 {/* "Delete for Everyone" is only for messages you sent */}
-                {(deleteTarget?.type === 'messages' || deleteTarget?.type === 'chat') && (
+                {(deleteTarget?.type === 'messages') && (
                   <button
                     onClick={() => handleDelete('everyone')}
                     className="w-full px-4 py-2 bg-red-800 text-white rounded-lg hover:bg-red-900 transition text-sm font-medium"
@@ -766,11 +756,11 @@ export default function AdminChat() {
                   </button>
                 )}
 
-                <div className="border-t dark:border-gray-600 my-1"></div>
+                <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
 
                 <button
                   onClick={() => setShowDeleteModal(false)}
-                  className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition text-sm"
+                  className="w-full px-4 py-2 text-black bg-gray-300 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-600 transition text-sm"
                   disabled={isDeleting}
                 >
                   Cancel
