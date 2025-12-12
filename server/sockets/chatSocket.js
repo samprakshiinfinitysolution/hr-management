@@ -5,7 +5,7 @@ export default function chatSocket(io) {
   let onlineUsers = []; 
 
   io.on("connection", (socket) => {
-    console.log("🟢 User connected:", socket.id);
+    // console.log("🟢 User connected:", socket.id);
 
     const { userId } = socket.handshake.auth;
 

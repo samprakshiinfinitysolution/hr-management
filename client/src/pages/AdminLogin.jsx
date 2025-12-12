@@ -22,21 +22,19 @@ function AdminLogin() {
     setSuccess("");
   };
 
- const handleLogin = async (e) => {
+const handleLogin = async (e) => {
   e.preventDefault();
   setLoading(true);
   setError("");
   setSuccess("");
 
   try {
-    const res = await API.post("/admin/login", form);
-    const {
-      accessToken,
-      refreshToken,
-      role,
-      name,
-      id,
-    } = res.data;
+    // ⭐ withCredentials true → browser refreshToken cookie accept करेगा
+    const res = await API.post("/admin/login", form, {
+      withCredentials: true,
+    });
+
+    const { accessToken, role, name, id } = res.data;
 
     const userData = {
       id,
@@ -49,13 +47,12 @@ function AdminLogin() {
     dispatch(
       loginSuccess({
         user: userData,
-        token: accessToken, // 🔥 Important
+        token: accessToken,
       })
     );
 
-    // Save tokens & user to storage
+    // ⭐ Save only accessToken (NO refreshToken)
     localStorage.setItem("accessToken", accessToken);
-    localStorage.setItem("refreshToken", refreshToken);
     localStorage.setItem("role", role.toLowerCase());
     localStorage.setItem("user", JSON.stringify(userData));
 

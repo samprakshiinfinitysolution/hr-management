@@ -2,6 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
+import cookieParser from "cookie-parser";
 import { fileURLToPath } from "url";
 import { createServer } from "http";
 import { Server } from "socket.io";
@@ -9,7 +10,6 @@ import chatSocket from "./sockets/chatSocket.js";
 import cron from "node-cron";
 import { autoCheckOut } from "./controllers/attendanceController.js";
 import { port, mongourl } from "./config/config.js";
-
 // Routes
 import adminRoutes from "./routes/adminRoutes.js";
 import employeeRoutes from "./routes/employeeRoutes.js";
@@ -36,7 +36,8 @@ const __filename = fileURLToPath(import.meta.url);
 // ✅ Express middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
+app.use(cookieParser());               
+app.set("trust proxy", 1);  
 // ✅ CORS setup (merged both versions)
 app.use(
   cors({

@@ -24,6 +24,7 @@ import {
   updateSubAdmin,
   getAdminSettings,
   updateAdminSettings,
+  logoutAdmin,
 } from "../controllers/adminController.js";
 
 import {
@@ -39,6 +40,7 @@ const router = express.Router();
 router.post("/register", registerAdmin);
 router.post("/login", loginAdmin);
 router.post("/refresh", refreshAdminAccessToken);
+router.post("/logout", logoutAdmin); 
 // Protected (any logged-in user)
 router.get("/me", verifyToken, getAdminProfile);
 // Employee CRUD (admin/hr manager)

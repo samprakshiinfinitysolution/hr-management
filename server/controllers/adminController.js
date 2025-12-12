@@ -55,11 +55,11 @@ export const loginAdmin = async (req, res) => {
         createdBy: admin.createdBy,
       },
       process.env.JWT_SECRET,
-      { expiresIn: "15m" }
+      { expiresIn: "15m" } // you can change to "15m" for prod
     );
 
     // -----------------------------------
-    // REFRESH TOKEN (Long Expiry)
+    // REFRESH TOKEN (Long Expiry) -> set as HttpOnly cookie
     // -----------------------------------
     const refreshToken = jwt.sign(
       {
@@ -69,13 +69,18 @@ export const loginAdmin = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    // (Optional) Save refresh token in DB for extra security
-    // admin.refreshToken = refreshToken;
-    // await admin.save();
+    // Set cookie (HttpOnly => not accessible from JS)
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // true in prod (requires HTTPS)
+      sameSite: "lax", // adjust if needed (strict/none) depending on client-server domain
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: "/", // ensure cookie sent to your refresh endpoint
+    });
 
-    res.json({
+    // Return only access token and user meta (do NOT return refresh token)
+    return res.json({
       accessToken,
-      refreshToken,
       role: admin.role,
       name: admin.name,
       id: admin._id,
@@ -83,42 +88,67 @@ export const loginAdmin = async (req, res) => {
     });
   } catch (error) {
     console.error("admin login error:", error);
-    res.status(500).json({ message: "Login error", error: error.message });
+    return res.status(500).json({ message: "Login error", error: error.message });
   }
 };
-
 export const refreshAdminAccessToken = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
-
+    // Read refresh token from cookie
+    const refreshToken = req.cookies?.refreshToken;
     if (!refreshToken) {
-      return res.status(400).json({ message: "Refresh token missing" });
+      return res.status(401).json({ message: "Refresh token missing" });
     }
 
-    // Verify refresh token
     let decoded;
     try {
       decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
     } catch (err) {
-      return res.status(401).json({ message: "Invalid refresh token" });
+      console.error("refresh token verify failed:", err);
+      return res.status(401).json({ message: "Invalid or expired refresh token" });
     }
 
-    // Create new access token
+    // Find admin to include role/isMainAdmin/createdBy in access token
+    const admin = await Admin.findById(decoded.id);
+    if (!admin) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Create new access token (include role & flags)
     const newAccessToken = jwt.sign(
       {
-        id: decoded.id,
+        id: admin._id,
+        role: admin.role,
+        isMainAdmin: admin.isMainAdmin,
+        createdBy: admin.createdBy,
       },
       process.env.JWT_SECRET,
-      { expiresIn: "15m" }
+      { expiresIn: "15m" } // for testing you can use "15s" or "1m"
     );
 
-    res.json({ accessToken: newAccessToken });
+    return res.json({ accessToken: newAccessToken });
   } catch (error) {
     console.error("refreshAdminAccessToken error:", error);
     return res.status(500).json({ message: "Server error" });
   }
 };
 
+// ------------------------
+// logoutAdmin (clear cookie)
+// ------------------------
+export const logoutAdmin = (req, res) => {
+  try {
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+    });
+    return res.json({ message: "Logged out" });
+  } catch (err) {
+    console.error("logoutAdmin error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
 /**
  * ✅ Get Admin Profile
  */
