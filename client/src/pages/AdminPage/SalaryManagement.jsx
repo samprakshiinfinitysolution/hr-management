@@ -287,7 +287,7 @@ export default function SalaryManagement() {
               </div>
 
               {/* Net Salary */}
-              <div className="p-4 text-black bg-gray-500 dark:bg-gray-300 rounded-lg flex justify-between items-center">
+              <div className="p-4 text-black bg-white dark:bg-gray-300 rounded-lg flex justify-between items-center">
                 <p className="text-lg font-bold">Net Payable Salary</p>
                 <p className="text-2xl font-bold font-mono">₹{salaryData.netSalary?.toFixed(2) || '0.00'}</p>
               </div>
@@ -295,7 +295,7 @@ export default function SalaryManagement() {
 
             <div className="mb-6 mt-6">
               <p className="text-sm font-medium mb-2">Remarks</p>
-              <p className="p-4 rounded-lg bg-gray-50 dark:bg-gray-300 text-sm text-black">
+              <p className="p-4 rounded-lg bg-white dark:bg-gray-300 text-sm text-black">
                 {salaryData.remarks || "No remarks."}
               </p>
             </div>
@@ -541,10 +541,10 @@ export default function SalaryManagement() {
         {/* Salary Settings Modal */}
         {showSettings && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-              <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white dark:bg-gray-800 z-10">
-                <h2 className="text-xl font-bold text-white">Salary Rule Settings</h2>
-                <button onClick={() => setShowSettings(false)} className="hover:text-red-500 text-red-400">
+            <div className="bg-white text-black dark:bg-gray-900 dark:text-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
+                <h2 className="text-xl font-bold">Salary Rule Settings</h2>
+                <button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-red-500 dark:hover:text-white">
                   <X size={24} />
                 </button>
               </div>

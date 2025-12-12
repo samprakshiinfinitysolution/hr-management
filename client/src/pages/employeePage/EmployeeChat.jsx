@@ -290,92 +290,82 @@ export default function EmployeeChat() {
       e.target.value = "";
     }
   };
- 
-  const handleDelete = async (scope) => { 
-  if (!deleteTarget) return;
-  setIsDeleting(true);
 
-  try {
-    const isChatDelete = deleteTarget.type === "chat";
-    const isMessageDelete =
-      deleteTarget.type === "messages" || deleteTarget.type === "message";
+  const handleDelete = async (scope) => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
 
-    const idsToDelete =
-      deleteTarget.type === "message"
-        ? [deleteTarget.id]
-        : deleteTarget.ids || [];
+    try {
+      const isChatDelete = deleteTarget.type === "chat";
+      const isMessageDelete =
+        deleteTarget.type === "messages" || deleteTarget.type === "message";
 
-    // -------------------------------------------------------
-    // ⭐ DELETE FOR EVERYONE 
-    // -------------------------------------------------------
-    if (scope === "everyone") {
-      if (isMessageDelete) {
-        await API.post("/chat/messages/delete-for-everyone", {
-          messageIds: idsToDelete,
-          user1: employeeId,
-          user2: selectedUser._id,
-        });
+      const idsToDelete =
+        deleteTarget.type === "message"
+          ? [deleteTarget.id]
+          : deleteTarget.ids || [];
 
-        // remove from UI
-        setMessages((prev) =>
-          prev.filter((m) => !idsToDelete.includes(m._id))
-        );
+      // -------------------------------------------------------
+      // ⭐ DELETE FOR EVERYONE 
+      // -------------------------------------------------------
+      if (scope === "everyone") {
+        if (isMessageDelete) {
+          await API.post("/chat/messages/delete-for-everyone", {
+            messageIds: idsToDelete,
+            user1: employeeId,
+            user2: selectedUser._id,
+          });
 
-        toast.success("Deleted for everyone");
+          // remove from UI
+          setMessages((prev) =>
+            prev.filter((m) => !idsToDelete.includes(m._id))
+          );
+
+          toast.success("Deleted for everyone");
+        }
       }
 
-      // delete whole chat globally (optional)
-      else if (isChatDelete) {
-        await API.post("/chat/messages/delete-for-everyone", {
-          messageIds: messages.map((m) => m._id),
-          user1: employeeId,
-          user2: selectedUser._id,
-        });
+      // -------------------------------------------------------
+      // ⭐ DELETE FOR ME (LOCAL ONLY)
+      // -------------------------------------------------------
+      if (scope === "me") {
+        if (isMessageDelete) {
+          // backend call → remove only current user's visibility
+          await Promise.all(
+            idsToDelete.map((msgId) => API.delete(`/chat/message/${msgId}`))
+          );
 
-        setMessages([]);
-        toast.success("Chat deleted for everyone");
+          // remove only from my UI, other user will still see it
+          setMessages((prev) =>
+            prev.filter((m) => !idsToDelete.includes(m._id))
+          );
+
+          toast.success("Deleted for me");
+        }
+
+        // clear complete chat for only ME
+        else if (isChatDelete) {
+          // await API.delete(`/chat/${selectedUser._id}/${employeeId}`);
+
+          // setMessages([]);
+          // toast.success("Chat cleared for me");
+
+          await API.delete(`/chat/clear-for-me/${selectedUser._id}`);
+          setMessages([]);
+          toast.success("Chat cleared for you");
+
+        }
       }
 
       setShowDeleteModal(false);
-      return;
+    } catch (err) {
+      console.error("Delete error:", err);
+      toast.error("Failed to delete");
+    } finally {
+      setIsDeleting(false);
+      setSelectedMessages([]);
     }
-
-    // -------------------------------------------------------
-    // ⭐ DELETE FOR ME (LOCAL ONLY)
-    // -------------------------------------------------------
-    if (scope === "me") {
-      if (isMessageDelete) {
-        // backend call → remove only current user's visibility
-        await Promise.all(
-          idsToDelete.map((msgId) => API.delete(`/chat/message/${msgId}`))
-        );
-
-        // remove only from my UI, other user will still see it
-        setMessages((prev) =>
-          prev.filter((m) => !idsToDelete.includes(m._id))
-        );
-
-        toast.success("Deleted for me");
-      }
-
-      // clear complete chat for only ME
-      else if (isChatDelete) {
-        await API.delete(`/chat/${selectedUser._id}/${employeeId}`);
-
-        setMessages([]);
-        toast.success("Chat cleared for me");
-      }
-    }
-
-    setShowDeleteModal(false);
-  } catch (err) {
-    console.error("Delete error:", err);
-    toast.error("Failed to delete");
-  } finally {
-    setIsDeleting(false);
-    setSelectedMessages([]);
-  }
-};
+  };
 
 
 
@@ -498,7 +488,7 @@ export default function EmployeeChat() {
         {selectedUser ? (
           <>
             {selectedMessages.length > 0 ? (
-              <div className="p-4 border-b dark:border-gray-700 bg-blue-50 dark:bg-blue-900/50 font-semibold flex justify-between items-center sticky top-0 z-10">
+              <div className="p-4 border-b dark:border-gray-700 bg-gray-100 text-black font-semibold flex justify-between items-center sticky top-0 z-10">
                 <button onClick={() => setSelectedMessages([])} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
                   <X size={20} />
                 </button>
@@ -511,7 +501,7 @@ export default function EmployeeChat() {
               <div className="p-4 border-b dark:border-gray-700 font-semibold text-blue-600 flex justify-between items-center sticky top-0 z-10">
                 <span>Chat with {selectedUser.name}</span>
                 <button onClick={confirmDeleteChat} className="text-red-600 hover:text-red-800 flex items-center gap-1 text-sm">
-                  <Trash2 size={18} /> Delete Chat
+                  <Trash2 size={18} />Clear all Chats
                 </button>
               </div>
             )}
@@ -532,8 +522,8 @@ export default function EmployeeChat() {
                           shadow-sm transition w-fit
                           ${m.senderId === employeeId
                             ? "ml-auto bg-blue-600 text-white rounded-br-sm"
-                            : "self-start bg-gray-200 text-black dark:bg-blue-900 dark:text-white rounded-bl-sm"}
-                          ${selectedMessages.includes(m._id) ? "bg-blue-400 dark:bg-gray-400" : ""}
+                            : "self-start bg-gray-200 text-black dark:bg-gray-700 dark:text-white rounded-bl-sm"}
+                          ${selectedMessages.includes(m._id) ? "!bg-gray-400 dark:!bg-gray-500" : ""}
                         `}
                         onMouseDown={() => m.senderId === employeeId && startLongPress(m._id)}
                         onMouseUp={() => {
@@ -662,15 +652,15 @@ export default function EmployeeChat() {
         {/* Delete Modal */}
         {showDeleteModal && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl w-full max-w-sm text-center">
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl shadow-xl w-full max-w-sm text-center">
               <h3 className="text-lg font-semibold mb-3 text-red-600">
                 {deleteTarget?.type === "message"
                   ? "Delete this message?"
                   : deleteTarget?.type === "messages"
-                    ? `Delete ${deleteTarget.ids.length} message(s)?`
-                    : "Delete entire chat?"}
+                    ? `Delete ${deleteTarget.ids.length} message(s)?` // This is for selected messages
+                    : "Clear All Chats?"}
               </h3>
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 {deleteTarget?.type === 'messages' && "This will permanently delete the message(s)."}
               </p>
               <div className="flex flex-col gap-3 mt-4">
@@ -679,11 +669,11 @@ export default function EmployeeChat() {
                   className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-medium"
                   disabled={isDeleting}
                 >
-                  {isDeleting ? "Deleting..." : `Delete for me`}
+                  {isDeleting ? "Processing..." : (deleteTarget?.type === 'chat' ? 'Clear for me' : 'Delete for me')}
                 </button>
 
                 {/* "Delete for Everyone" is only for messages you sent */}
-                {(deleteTarget?.type === 'messages' || deleteTarget?.type === 'chat') && (
+                {(deleteTarget?.type === 'messages') && (
                   <button
                     onClick={() => handleDelete('everyone')}
                     className="w-full px-4 py-2 bg-red-800 text-white rounded-lg hover:bg-red-900 transition text-sm font-medium"
@@ -693,11 +683,11 @@ export default function EmployeeChat() {
                   </button>
                 )}
 
-                <div className="border-t dark:border-gray-600 my-1"></div>
+                <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
 
                 <button
                   onClick={() => setShowDeleteModal(false)}
-                  className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition text-sm"
+                  className="w-full px-4 py-2 bg-gray-200 text-black dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition text-sm"
                   disabled={isDeleting}
                 >
                   Cancel

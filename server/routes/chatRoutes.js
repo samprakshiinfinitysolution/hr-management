@@ -7,7 +7,8 @@ import {
   deleteChat,
   getAllAdminsForChat,
   getAllEmployeesForChat,
-  deleteMessagesForEveryone
+  deleteMessagesForEveryone,
+  clearChatForMe
 } from "../controllers/chatController.js";
 
 import uploadMiddleware from "../middleware/uploadCloudinary.js";
@@ -25,6 +26,7 @@ router.get("/employees-for-chat", verifyToken, getAllEmployeesForChat);
 router.get("/:user1/:user2", verifyToken, getMessages);
 router.post("/", verifyToken, sendMessage);
 router.delete("/message/:messageId", verifyToken, deleteMessage);
+router.delete("/clear-for-me/:otherUserId", verifyToken, clearChatForMe);
 
 // Middleware to attach socket.io instance
 const attachIo = (req, res, next) => {

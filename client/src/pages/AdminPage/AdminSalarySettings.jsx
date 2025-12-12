@@ -103,7 +103,7 @@ export default function AdminSalarySettings() {
   ];
 
   return (
-    <div className="p-6 text-white">
+    <div className="p-6">
       <Toaster />
       <div className="space-y-4 ">
         <div>
@@ -113,11 +113,11 @@ export default function AdminSalarySettings() {
           <select
             value={rule.baseSalaryType}
             onChange={(e) => handleChange("baseSalaryType", e.target.value)}
-            className="mt-1 p-2 border rounded w-full bg-transparent border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
+            className="mt-1 p-2 border rounded w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
           >
-            <option value="fixed">Fixed (monthly)</option>
-            <option value="daily">Daily</option>
-            <option value="hourly">Hourly</option>
+            <option className="bg-white dark:bg-gray-900" value="fixed">Fixed (monthly)</option>
+            <option className="bg-white dark:bg-gray-900" value="daily">Daily</option>
+            <option className="bg-white dark:bg-gray-900" value="hourly">Hourly</option>
           </select>
         </div>
 
@@ -131,7 +131,7 @@ export default function AdminSalarySettings() {
             max="31"
             value={rule.payDays}
             onChange={(e) => handleChange("payDays", Number(e.target.value))}
-            className="mt-1 p-2 border rounded w-full bg-transparent border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
+            className="mt-1 p-2 border rounded w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
 
@@ -141,10 +141,10 @@ export default function AdminSalarySettings() {
             <select
               value={rule.absentDeductionType}
               onChange={(e) => handleChange("absentDeductionType", e.target.value)}
-              className="mt-1 p-2 border rounded w-full bg-transparent border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 p-2 border rounded w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="full-day">Full day (daily salary)</option>
-              <option value="fixed">Fixed amount per absent day</option>
+              <option className="bg-white dark:bg-gray-900" value="full-day">Full day (daily salary)</option>
+              <option className="bg-white dark:bg-gray-900" value="fixed">Fixed amount per absent day</option>
             </select>
           </div>
 
@@ -155,7 +155,7 @@ export default function AdminSalarySettings() {
                 type="number"
                 value={rule.absentFixedAmount}
                 onChange={(e) => handleChange("absentFixedAmount", Number(e.target.value))}
-                className="mt-1 p-2 border rounded w-full bg-transparent border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
+                className="mt-1 p-2 border rounded w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
           )}
@@ -170,7 +170,7 @@ export default function AdminSalarySettings() {
               max="100"
               value={rule.halfDayDeduction}
               onChange={(e) => handleChange("halfDayDeduction", Number(e.target.value))}
-              className="mt-1 p-2 border rounded w-full bg-transparent border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 p-2 border rounded w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           <div>
@@ -181,7 +181,7 @@ export default function AdminSalarySettings() {
               max="100"
               value={rule.lateDeduction}
               onChange={(e) => handleChange("lateDeduction", Number(e.target.value))}
-              className="mt-1 p-2 border rounded w-full bg-transparent border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 p-2 border rounded w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           <div>
@@ -192,12 +192,12 @@ export default function AdminSalarySettings() {
               max="100"
               value={rule.earlyCheckoutDeduction}
               onChange={(e) => handleChange("earlyCheckoutDeduction", Number(e.target.value))}
-              className="mt-1 p-2 border rounded w-full bg-transparent border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 p-2 border rounded w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
         </div>
 
-        <hr />
+        <hr className="border-gray-200 dark:border-gray-700" />
 
         <h3 className="font-semibold">Payable Days Configuration</h3>
         <div className="space-y-2">
@@ -223,7 +223,7 @@ export default function AdminSalarySettings() {
           </div>
         </div>
 
-        <hr />
+        <hr className="border-gray-200 dark:border-gray-700" />
 
         <h3 className="font-semibold">Allowances</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -235,7 +235,7 @@ export default function AdminSalarySettings() {
               max="100"
               value={rule.hraPercent}
               onChange={(e) => handleChange("hraPercent", Number(e.target.value))}
-              className="mt-1 p-2 border rounded w-full bg-transparent border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 p-2 border rounded w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           <div>
@@ -245,7 +245,7 @@ export default function AdminSalarySettings() {
               min="0"
               value={rule.conveyance}
               onChange={(e) => handleChange("conveyance", Number(e.target.value))}
-              className="mt-1 p-2 border rounded w-full bg-transparent border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 p-2 border rounded w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           <div>
@@ -255,7 +255,7 @@ export default function AdminSalarySettings() {
               min="0"
               value={rule.childrenAllowance}
               onChange={(e) => handleChange("childrenAllowance", Number(e.target.value))}
-              className="mt-1 p-2 border rounded w-full bg-transparent border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 p-2 border rounded w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           <div>
@@ -265,28 +265,28 @@ export default function AdminSalarySettings() {
               min="0"
               value={rule.fixedAllowance}
               onChange={(e) => handleChange("fixedAllowance", Number(e.target.value))}
-              className="mt-1 p-2 border rounded w-full bg-transparent border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 p-2 border rounded w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
         </div>
 
-        <hr />
+        <hr className="border-gray-200 dark:border-gray-700" />
 
         <h3 className="font-semibold">Leave Settings</h3>
-        <p className="text-sm -mt-2 mb-2">
+        <p className="text-sm -mt-2 mb-2 text-gray-600 dark:text-gray-400">
           Define monthly leave quotas and how they affect salary deductions.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Paid Leave */}
           <div className="space-y-2">
             <label htmlFor="monthlyPaidLeave" className="block font-medium">Paid Leave</label>
-            <div className="flex gap-2">
-              <input type="number" id="monthlyPaidLeave" value={rule.monthlyPaidLeave} onChange={(e) => handleChange("monthlyPaidLeave", Number(e.target.value))} className="p-2 border rounded w-full bg-transparent border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500" placeholder="Count" />
+            <div className="flex gap-2 items-center">
+              <input type="number" id="monthlyPaidLeave" value={rule.monthlyPaidLeave} onChange={(e) => handleChange("monthlyPaidLeave", Number(e.target.value))} className="p-2 border rounded w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500" placeholder="Count" />
               <select
                 aria-label="Paid Leave Type"
                 value={rule.paidLeaveType}
                 onChange={(e) => handleChange("paidLeaveType", e.target.value)}
-                className="p-2 border rounded w-full bg-transparent border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
+                className="p-2 border rounded w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
               >
                 {leaveOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
               </select>
@@ -296,13 +296,13 @@ export default function AdminSalarySettings() {
           {/* Sick Leave */}
           <div className="space-y-2">
             <label htmlFor="monthlySickLeave" className="block font-medium">Sick Leave</label>
-            <div className="flex gap-2">
-              <input type="number" id="monthlySickLeave" value={rule.monthlySickLeave} onChange={(e) => handleChange("monthlySickLeave", Number(e.target.value))} className="p-2 border rounded w-full bg-transparent border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500" placeholder="Count" />
+            <div className="flex gap-2 items-center">
+              <input type="number" id="monthlySickLeave" value={rule.monthlySickLeave} onChange={(e) => handleChange("monthlySickLeave", Number(e.target.value))} className="p-2 border rounded w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500" placeholder="Count" />
               <select
                 aria-label="Sick Leave Type"
                 value={rule.sickLeaveType}
                 onChange={(e) => handleChange("sickLeaveType", e.target.value)}
-                className="p-2 border rounded w-full bg-transparent border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
+                className="p-2 border rounded w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
               >
                 {leaveOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
               </select>
@@ -312,13 +312,13 @@ export default function AdminSalarySettings() {
           {/* Casual Leave */}
           <div className="space-y-2">
             <label htmlFor="monthlyCasualLeave" className="block font-medium">Casual Leave</label>
-            <div className="flex gap-2">
-              <input type="number" id="monthlyCasualLeave" value={rule.monthlyCasualLeave} onChange={(e) => handleChange("monthlyCasualLeave", Number(e.target.value))} className="p-2 border rounded w-full bg-transparent border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500" placeholder="Count" />
+            <div className="flex gap-2 items-center">
+              <input type="number" id="monthlyCasualLeave" value={rule.monthlyCasualLeave} onChange={(e) => handleChange("monthlyCasualLeave", Number(e.target.value))} className="p-2 border rounded w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500" placeholder="Count" />
               <select
                 aria-label="Casual Leave Type"
                 value={rule.casualLeaveType}
                 onChange={(e) => handleChange("casualLeaveType", e.target.value)}
-                className="p-2 border rounded w-full bg-transparent border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
+                className="p-2 border rounded w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
               >
                 {leaveOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
               </select>

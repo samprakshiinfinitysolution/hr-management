@@ -193,3 +193,28 @@ export const deleteChat = async (req, res) => {
     res.status(500).json({ message: "Chat delete failed" });
   }
 };
+
+export const clearChatForMe = async (req, res) => {
+  try {
+    const userId = req.user.id;         
+    const otherUserId = req.params.otherUserId;
+
+    await Chat.updateMany(
+      {
+        $or: [
+          { senderId: userId, receiverId: otherUserId },
+          { senderId: otherUserId, receiverId: userId }
+        ]
+      },
+      { $pull: { visibleTo: userId } }   
+    );
+
+    return res.json({
+      success: true,
+      message: "Chat cleared for you only"
+    });
+  } catch (err) {
+    console.error("❌ Clear chat error:", err);
+    res.status(500).json({ message: "Clear chat failed" });
+  }
+};
