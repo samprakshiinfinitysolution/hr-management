@@ -9,7 +9,6 @@ import { jwtSecret } from "../config/config.js";
 import Attendance from "../models/attendanceModel.js"; // if used
 // ... other imports if required
 
-
 export const loginEmployee = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -24,9 +23,9 @@ export const loginEmployee = async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    // -------------------------------
+    // -----------------------------------
     // ACCESS TOKEN (Short Expiry)
-    // -------------------------------
+    // -----------------------------------
     const accessToken = jwt.sign(
       {
         id: employee._id,
@@ -34,12 +33,12 @@ export const loginEmployee = async (req, res) => {
         adminId: employee.createdBy || employee.adminId,
       },
       process.env.JWT_SECRET,
-      { expiresIn: "15m" } // short life
+      { expiresIn: "15m" } // short expiry for testing
     );
 
-    // -------------------------------
-    // REFRESH TOKEN (Long Expiry)
-    // -------------------------------
+    // -----------------------------------
+    // REFRESH TOKEN → HttpOnly Cookie
+    // -----------------------------------
     const refreshToken = jwt.sign(
       {
         id: employee._id,
@@ -48,13 +47,18 @@ export const loginEmployee = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    // If you want, you can store refresh token in DB for extra security
-    // employee.refreshToken = refreshToken;
-    // await employee.save();
+    // Send HttpOnly cookie
+    res.cookie("refreshToken_Employee", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", 
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: "/", 
+    });
 
-    res.json({
+    // Do NOT send refresh token in response
+    return res.json({
       accessToken,
-      refreshToken,
       employee: {
         _id: employee._id,
         name: employee.name,
@@ -70,36 +74,59 @@ export const loginEmployee = async (req, res) => {
 
 export const refreshEmployeeAccessToken = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    // Read refresh token from HttpOnly cookie
+    const refreshToken = req.cookies?.refreshToken_Employee;
 
     if (!refreshToken) {
-      return res.status(400).json({ message: "Refresh token missing" });
+      return res.status(401).json({ message: "Refresh token missing" });
     }
 
-    // Verify refresh token
     let decoded;
     try {
       decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
     } catch (err) {
-      return res.status(401).json({ message: "Invalid refresh token" });
+      return res.status(401).json({ message: "Invalid or expired refresh token" });
+    }
+
+    const employee = await Employee.findById(decoded.id);
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found" });
     }
 
     // Create new access token
     const newAccessToken = jwt.sign(
       {
-        id: decoded.id,
+        id: employee._id,
         role: "employee",
+        adminId: employee.createdBy || employee.adminId,
       },
       process.env.JWT_SECRET,
-      { expiresIn: "15m" }
+      { expiresIn: "15m" } // for testing
     );
 
-    res.json({ accessToken: newAccessToken });
+    return res.json({ accessToken: newAccessToken });
   } catch (error) {
     console.error("refreshEmployeeAccessToken error:", error);
     return res.status(500).json({ message: "Server error" });
   }
 };
+
+export const logoutEmployee = (req, res) => {
+  try {
+    res.clearCookie("refreshToken_Employee", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+    });
+
+    return res.json({ message: "Employee logged out" });
+  } catch (err) {
+    console.error("logoutEmployee error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 
 // GET PROFILE (Employee)
 export const getProfile = async (req, res) => {

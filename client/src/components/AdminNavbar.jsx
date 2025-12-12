@@ -72,25 +72,27 @@ export default function AdminNavbar({ toggleSidebar }) {
     }
   };
 
-  // const handleLogout = () => {
-  //   toast.success("Logout successfully");
-  //   localStorage.clear();
-  //   navigate("/");
-  // };
+  const handleLogout = async () => {
+  try {
+    // Ask backend to clear HttpOnly refresh token cookie
+    await API.post("/admin/logout", {}, { withCredentials: true });
+  } catch (err) {
+    console.error("Logout error:", err);
+  }
 
-  const handleLogout = () => {
-    toast.success("Logout successfully");
+  toast.success("Logout successfully");
 
-    // Remove only auth related keys (safe logout)
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("user");
-    localStorage.removeItem("role");
+  // Clear localStorage
+  localStorage.removeItem("accessToken");
+  localStorage.removeItem("user");
+  localStorage.removeItem("role");
 
-    // Force reset redux + routing
-    navigate("/", { replace: true });
-    window.location.reload(); // 🔥 Important: Clears leftover redux state
-  };
+  // Reset Redux & redirect
+  navigate("/", { replace: true });
+
+  // Clear any in-memory redux state
+  window.location.reload();
+};
 
   const handleDarkToggle = () => {
     dispatch(toggleDarkMode());

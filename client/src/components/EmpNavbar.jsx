@@ -95,25 +95,27 @@ export default function EmpNavbar({ toggleSidebar }) {
     }
   };
 
-  // const handleLogout = () => {
-  //   toast.success("Logout successfully");
-  //   localStorage.removeItem("token");
-  //   localStorage.removeItem("role");
-  //   navigate("/");
-  // };
+  const handleLogout = async () => {
+  try {
+    // 🔥 Backend will clear HttpOnly refresh token cookie
+    await API.post("/logout", {}, { withCredentials: true });
+  } catch (err) {
+    console.error("Logout error:", err);
+  }
 
-  const handleLogout = () => {
-    toast.success("Logout successfully");
+  toast.success("Logout successfully");
 
-    // REMOVE NEW TOKEN KEYS
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("user");
-    localStorage.removeItem("role");
+  // Clear only frontend stored data
+  localStorage.removeItem("accessToken");
+  localStorage.removeItem("user");
+  localStorage.removeItem("role");
 
-    navigate("/", { replace: true });
-    window.location.reload(); // optional but recommended for clean logout
-  };
+  // Redirect
+  navigate("/", { replace: true });
+
+  // Optional: Reset Redux memory + state
+  window.location.reload();
+};
 
   const handleDarkToggle = () => {
     dispatch(toggleDarkMode());

@@ -11,6 +11,7 @@ import {
   getAllEmployeesForChat,
   getAllEmployeesPublic,
   refreshEmployeeAccessToken,
+  logoutEmployee,
 } from "../controllers/employeeController.js";
 
 import { verifyToken, employeeOnly } from "../middleware/authMiddleware.js";
@@ -20,6 +21,7 @@ const router = express.Router();
 // 🔹 Public
 router.post("/login", loginEmployee);
 router.post("/refresh", refreshEmployeeAccessToken);
+router.post("/logout", logoutEmployee);
 // 🔹 Protected (Employee features)
 router.get("/dashboard", verifyToken, employeeOnly, getEmployeeDashboard);
 router.get("/profile", verifyToken, employeeOnly, getProfile);
