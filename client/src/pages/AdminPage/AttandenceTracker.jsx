@@ -5,10 +5,10 @@ import API from "../../utils/api";
 import { Close, Email, Phone, Visibility, CalendarMonth, People, CheckCircle, Cancel, AccessTime, EditCalendar } from "@mui/icons-material";
 import { Download } from 'lucide-react'; // Import Download icon
 import { toast, Toaster } from "react-hot-toast";
-import dayjs from "dayjs";
+import dayjs from "dayjs"; 
 
 // Reusable Table Component
-const AttendanceTable = ({ records, loading, userType, onRowClick }) => {
+const AttendanceTable = ({ records, loading, userType, onNameClick, onActionClick }) => {
   if (loading) return <p className="text-center py-8">Loading...</p>;
   if (records.length === 0) return (
     <div className="p-8 text-center">
@@ -19,7 +19,7 @@ const AttendanceTable = ({ records, loading, userType, onRowClick }) => {
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1024px]">
+      <table className="w-full min-w-[900px] md:min-w-full">
         <thead>
           <tr className="bg-gray-300 text-black">
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider rounded-tl-lg">Employee</th>
@@ -27,16 +27,17 @@ const AttendanceTable = ({ records, loading, userType, onRowClick }) => {
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Check-In</th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Check-Out</th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Total Time</th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Total Break</th>
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Total Time</th>
             <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider rounded-tr-lg">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
           {records.map((record) => (
             <tr key={record.id} className="hover:bg-gray-300 hover:text-black dark:hover:bg-gray-300 dark:hover:text-black">
-              <td className="px-4 py-4 whitespace-nowrap">
-                <div className="text-sm font-medium">{record.name || record.user?.name}</div>
+              <td className="px-4 py-4 whitespace-nowrap" onClick={() => onNameClick(record)}>
+                <div className="text-sm font-medium text-blue-600 hover:underline cursor-pointer">{record.name || record.user?.name}</div>
+
                 <div className="text-sm text-gray-500">{record.email || record.user?.email}</div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm">{userType === 'employee' ? record.Department : (record.role || "-").toUpperCase()}</td>
@@ -47,13 +48,13 @@ const AttendanceTable = ({ records, loading, userType, onRowClick }) => {
               </td>
               <td className="px-4 py-4 whitespace-nowrap text-sm">{record.avgCheckIn}</td>
               <td className="px-4 py-4 whitespace-nowrap text-sm">{record.avgCheckOut}</td>
-              <td className="px-4 py-4 whitespace-nowrap text-sm">{record.totalWorkTime || "-"}</td>
               <td className="px-4 py-4 whitespace-nowrap text-sm">
                 {record.totalBreakTime || "-"}
               </td>
+              <td className="px-4 py-4 whitespace-nowrap text-sm">{record.totalWorkTime || "-"}</td>
 
               <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <button onClick={() => onRowClick(record)} className="text-blue-600 hover:text-blue-900">
+                <button onClick={() => onActionClick(record)} className="text-blue-600 hover:text-blue-900">
                   <Visibility fontSize="small" />
                 </button>
               </td>
@@ -65,15 +66,44 @@ const AttendanceTable = ({ records, loading, userType, onRowClick }) => {
   );
 };
 
+
 const getStatusColor = (status) => {
+  if (!status) return ""; // ✅ Future day blank
+
   switch (status) {
-    case "Present": return "bg-green-100 text-green-800";
+    case "Present":
+      return "bg-green-500 text-white";
+
+    case "Half Day":
+      return "bg-yellow-400 text-black";
+
     case "Late":
-    case "Late Login": return "bg-yellow-100 text-yellow-800";
-    case "Absent": return "bg-red-100 text-red-800";
-    default: return "bg-gray-100 text-gray-800";
+    case "Late Login":
+      return "bg-orange-400 text-black";
+
+    case "Absent":
+      return "bg-red-500 text-white";
+
+    case "Sunday":
+    case "Weekly Off":
+      return "bg-red-600 text-white";
+
+    default:
+      return "bg-gray-200 text-black";
   }
 };
+const getRowBgColor = (status) => {
+  if (!status) return ""; // future
+
+  if (status === "Present") return "bg-green-50";
+  if (status === "Absent") return "bg-red-50";
+  if (status === "Half Day") return "bg-yellow-50";
+  if (status === "Late") return "bg-orange-50";
+  if (status === "Sunday") return "bg-red-100";
+
+  return "";
+};
+
 
 const AttendanceTracker = () => {
   const [activeTab, setActiveTab] = useState('employees');
@@ -94,7 +124,11 @@ const AttendanceTracker = () => {
     breaks: [],
     remark: '',
   });
-
+  const [monthlyAttendance, setMonthlyAttendance] = useState([]);
+  const [monthLoading, setMonthLoading] = useState(false);
+  const [summaryEmployee, setSummaryEmployee] = useState(null);
+  const [monthlySummary, setMonthlySummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
   // Helper to calculate total work time between checkIn and checkOut
   const calculateWorkDuration = (checkIn, checkOut) => {
     if (!checkIn || !checkOut) return "-";
@@ -109,24 +143,24 @@ const AttendanceTracker = () => {
 
   // Helper to calculate total break time
   const calculateTotalBreak = (breaks = []) => {
-  if (!Array.isArray(breaks) || breaks.length === 0) return "-";
+    if (!Array.isArray(breaks) || breaks.length === 0) return "-";
 
-  let totalMs = 0;
+    let totalMs = 0;
 
-  breaks.forEach(b => {
-    if (!b.start || !b.end) return;
+    breaks.forEach(b => {
+      if (!b.start || !b.end) return;
 
-    const start = new Date(b.start);
-    const end = new Date(b.end);
+      const start = new Date(b.start);
+      const end = new Date(b.end);
 
-    if (!isNaN(start) && !isNaN(end) && end > start) {
-      totalMs += (end - start);
-    }
-  });
+      if (!isNaN(start) && !isNaN(end) && end > start) {
+        totalMs += (end - start);
+      }
+    });
 
-  const minutes = Math.floor(totalMs / 60000);
-  return `${minutes} min`;
-};
+    const minutes = Math.floor(totalMs / 60000);
+    return `${minutes} min`;
+  };
 
   // Helper: robust half-day detection from attendance record
   const isHalfDayRecord = (attendance) => {
@@ -198,7 +232,6 @@ const AttendanceTracker = () => {
         setLoading(false);
       }
     };
-
     const fetchAdminAttendance = async (date) => {
       setLoading(true);
       try {
@@ -247,6 +280,34 @@ const AttendanceTracker = () => {
     }
   }, [selectedDate, activeTab]);
 
+  const handleEmployeeClick = (employee) => {
+    setSelectedEmployee(employee);
+    fetchMonthlyAttendance(employee.id);
+  };
+
+  const fetchMonthlyAttendance = async (employeeId) => {
+    try {
+      setMonthLoading(true);
+
+      const month = dayjs(selectedDate).format("YYYY-MM");
+
+      const res = await API.get(
+        `/attendance/employee/${employeeId}/monthly?month=${month}`
+      );
+
+      setMonthlyAttendance(res.data || []);
+    } catch (err) {
+      toast.error("Failed to load monthly attendance");
+    } finally {
+      setMonthLoading(false);
+    }
+  };
+
+  const handleActionClick = async (employee) => {
+    // Now, this function will just set the employee record for the daily details modal.
+    // No need to fetch monthly data here anymore.
+    setSummaryEmployee(employee);
+  };
   const handleDateChange = (e) => {
     setSelectedDate(dayjs(e.target.value).toDate());
   };
@@ -429,7 +490,7 @@ const AttendanceTracker = () => {
       {/* --- Responsive Header --- */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
         <h1 className="text-2xl md:text-3xl font-bold text-center md:text-left">📅 Attendance Tracker</h1>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-center gap-4">
+        <div className="flex flex-wrap items-center justify-center md:justify-end gap-4">
           <div className="flex-1">
             <label htmlFor="employee-filter" className="text-sm font-medium sr-only md:not-sr-only md:mr-2">Employee:</label>
             <select
@@ -512,7 +573,7 @@ const AttendanceTracker = () => {
       ) : (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
             {attendanceSummary.map((summary, index) => (
               <div key={index} className="shadow rounded-lg p-4 flex items-center gap-4">
                 <div>{summary.icon}</div>
@@ -530,67 +591,209 @@ const AttendanceTracker = () => {
               <h3 className="text-xl font-semibold">{activeTab === 'employees' ? 'Employee Attendance' : 'HR & Manager Attendance'}</h3>
               <p className="mt-1 text-sm text-gray-600">Total: {currentRecords.length} records</p>
             </div>
-            <AttendanceTable
+            {/* <AttendanceTable
               records={currentRecords}
               loading={loading}
               userType={activeTab === 'employees' ? 'employee' : 'admin'}
               onRowClick={setSelectedEmployee}
+            /> */}
+            <AttendanceTable
+              records={currentRecords}
+              loading={loading}
+              userType={activeTab === 'employees' ? 'employee' : 'admin'}
+              onNameClick={handleEmployeeClick}
+              onActionClick={handleActionClick}
             />
+
           </div>
         </>
       )}
 
-      {/* Employee Details Modal */}
-      {selectedEmployee && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 p-4 bg-black/50">
-          <div className="rounded-lg p-6 max-w-md w-full bg-white text-black dark:bg-gray-800 dark:text-white">
+      {/* --- Summary Modal (on Action Button click) --- */}
+      {summaryEmployee && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white text-black dark:bg-gray-800 rounded-lg w-full max-w-lg p-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Details</h2>
-              <button onClick={() => setSelectedEmployee(null)} className="hover:text-gray-700">
-                <Close fontSize="small" className='hover:text-red-800' />
+              <h2 className="text-xl font-bold">Daily Details</h2>
+              <button onClick={() => setSummaryEmployee(null)} className='hover:text-red-700 text-gray-400'>
+                <Close />
               </button>
             </div>
-            <div className="space-y-3">
-              <p><strong>Name:</strong> {selectedEmployee.name}</p>
-              {selectedEmployee.Department && <p><strong>Department:</strong> {selectedEmployee.Department}</p>}
-              <p><strong>Role:</strong> {selectedEmployee.role}</p>
-              {selectedEmployee.joinDate && <p><strong>Join Date:</strong> {selectedEmployee.joinDate}</p>}
-              <p className="flex items-center gap-2"><Email fontSize="small" /> <strong>Email:</strong> {selectedEmployee.email}</p>
-              {selectedEmployee.breaks?.length > 0 && (
-                <div>
-                  <strong>Breaks:</strong>
-
-                  {selectedEmployee.breaks.map((b, i) => {
-                    const start = b.start ? dayjs(b.start).format("HH:mm") : "-";
-
-                    const actualEnd = b.end ? dayjs(b.end).format("HH:mm") : "Active";
-
-                    const actualMin = b.end ?
-                      Math.floor((new Date(b.end) - new Date(b.start)) / 60000) : 0;
-
-                    return (
-                      <p key={i} className="ml-4 text-sm">
-                        <strong>Break {i + 1}:</strong> {start} - {actualEnd}
-                        <span className="text-blue-500 ml-2">({actualMin} min used)</span>
-                        {"  "}
-                        {b.exceeded && <span className="text-yellow-500 font-semibold">(Exceeded)</span>}
-                      </p>
-                    );
-                  })}
-                </div>
-              )}
-
-
-
-              {selectedEmployee.phone && <p className="flex items-center gap-2"><Phone fontSize="small" /> <strong>Phone:</strong> {selectedEmployee.phone}</p>}
-              <p><strong>Status:</strong> <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(selectedEmployee.status)}`}>{selectedEmployee.status}</span></p>
-            </div>
-            <div className="mt-6 flex justify-end">
-              <button onClick={() => setSelectedEmployee(null)} className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">Close</button>
+            <div className="space-y-4">
+              <div className="flex justify-between border-b pb-2">
+                <span className="font-medium">Employee:</span>
+                <span>{summaryEmployee.name}</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="font-medium">Date:</span>
+                <span>{dayjs(selectedDate).format("DD MMMM, YYYY")}</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="font-medium">Status:</span>
+                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(summaryEmployee.status)}`}>
+                  {summaryEmployee.status}
+                </span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="font-medium">Check-In:</span>
+                <span className="font-bold">{summaryEmployee.avgCheckIn}</span>
+              </div>
+              <div className="flex justify-between border-b pb-2">
+                <span className="font-medium">Check-Out:</span>
+                <span className="font-bold">{summaryEmployee.avgCheckOut}</span>
+              </div>
+              <div>
+                <span className="font-medium">Breaks:</span>
+                {summaryEmployee.breaks && summaryEmployee.breaks.length > 0 ? (
+                  <ul className="list-disc list-inside mt-1 space-y-1">
+                    {summaryEmployee.breaks.map((br, i) => (
+                      <li key={i} className="text-sm">
+                        {dayjs(br.start).format("HH:mm")} - {br.end ? dayjs(br.end).format("HH:mm") : 'Active'}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="ml-2 text-gray-500">No breaks taken</span>
+                )}
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* --- Detailed Monthly Attendance Modal (on Name click) --- */}
+      {(() => {
+        if (!selectedEmployee || !monthlyAttendance) return null;
+
+        const summary = monthlyAttendance.reduce((acc, day) => {
+          switch (day.status) {
+            case "Late":
+            case "Late Login":
+              acc.late++;
+              break;
+            case "Present":
+              acc.present++;
+              break;
+            case "Absent":
+              acc.absent++;
+              break;
+            case "Half Day":
+              acc.halfDay++;
+              break;
+          }
+          return acc;
+        }, { present: 0, absent: 0, halfDay: 0, late: 0 });
+
+        const summaryCards = [
+          { title: "Present", value: summary.present, icon: <CheckCircle className="text-green-500" /> },
+          { title: "Late", value: summary.late, icon: <AccessTime className="text-yellow-500" /> },
+          { title: "Absent", value: summary.absent, icon: <Cancel className="text-red-500" /> },
+          { title: "Half Days", value: summary.halfDay, icon: <CalendarMonth className="text-indigo-500" /> },
+        ];
+
+      return (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white text-black dark:bg-gray-800 rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6">
+
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">
+                Monthly Attendance – {selectedEmployee.name}
+              </h2>
+              <button onClick={() => setSelectedEmployee(null)} className='hover:text-red-700 text-gray-400 '>
+                <Close />
+              </button>
+            </div>
+
+            {monthLoading ? (
+              <p>Loading...</p>
+            ) : monthlyAttendance.length === 0 ? (
+              <p className="text-center text-gray-500">No records found</p>
+            ) : (
+              <>
+                {/* Summary Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                  {summaryCards.map((card, index) => (
+                    <div key={index} className="shadow-sm rounded-lg p-3 flex items-center gap-3 border">
+                      <div>{card.icon}</div>
+                      <div>
+                        <h3 className="text-xs font-medium">{card.title}</h3>
+                        <p className="text-xl font-semibold">{card.value}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+              <table className="w-full border">
+                <thead className="bg-gray-200">
+                  <tr>
+                    <th className="p-2 text-left">Date</th>
+                    <th>Day</th>
+                    <th>Status</th>
+                    <th>Check-In</th>
+                    <th>Check-Out</th>
+                    <th>Break Time</th>
+                    <th>Work Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+  {monthlyAttendance.map((day, i) => (
+    <tr
+      key={i}
+      className={`border-t ${getRowBgColor(day.status)}`}
+    >
+      {/* Date */}
+      <td className="p-2">
+        {dayjs(day.date).format("DD MMM YYYY")}
+      </td>
+
+      {/* Day */}
+      <td className="p-2">
+        {day.day}
+      </td>
+
+      {/* Status */}
+      <td className="p-2">
+        {day.status ? (
+          <span
+            className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(day.status)}`}
+          >
+            {day.status}
+          </span>
+        ) : (
+          <span className="text-gray-400">—</span> // ✅ Future day blank
+        )}
+      </td>
+
+      {/* Check-in */}
+      <td className="p-2">
+        {day.checkIn ? dayjs(day.checkIn).format("HH:mm") : "-"}
+      </td>
+
+      {/* Check-out */}
+      <td className="p-2">
+        {day.checkOut ? dayjs(day.checkOut).format("HH:mm") : "-"}
+      </td>
+
+      {/* Break */}
+      <td className="p-2">
+        {day.totalBreakTime || "-"}
+      </td>
+
+      {/* Work Time */}
+      <td className="p-2">
+        {day.totalWorkTime || "-"}
+      </td>
+    </tr>
+  ))}
+</tbody>
+
+              </table>
+              </>
+            )}
+          </div>
+        </div>
+      );
+      })()}
 
       {/* Manual Attendance Entry Modal (Scrollable + Multiple Breaks) */}
       {isManualEntryModalOpen && (

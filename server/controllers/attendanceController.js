@@ -4,8 +4,12 @@ import Employee from "../models/employeeModel.js";
 import Admin from "../models/adminModel.js";
 import dayjs from "dayjs";
 import moment from "moment-timezone";
-
-
+const isSunday = (date) => {
+  return new Date(date).getDay() === 0;
+};
+const isFutureDate = (date) => {
+  return moment(date).isAfter(moment(), "day");
+};
 // normalizeSettings
 const normalizeSettings = (raw = {}) => {
   return {
@@ -213,7 +217,10 @@ export const autoCheckOut = async () => {
     const pending = await Attendance.find({
       date: { $gte: todayStart, $lte: todayEnd },
       checkIn: { $exists: true },
-      checkOut: { $exists: false }
+      $or: [
+        { checkOut: { $exists: false } },
+        { checkOut: null }
+      ]
     }).populate("user", "createdBy");
 
     let processed = 0;
@@ -334,9 +341,6 @@ export const manualAttendance = async (req, res) => {
       status: status,
       remark: remark || `Manually set to ${status} by admin.`,
       checkIn: checkIn ? new Date(checkIn) : null,
-      checkOut: checkOut ? new Date(checkOut) : null,
-      login: checkIn ? moment(checkIn).tz("Asia/Kolkata").format("HH:mm") : null,
-      logout: checkOut ? moment(checkOut).tz("Asia/Kolkata").format("HH:mm") : null,
       breaks: (breaks || []).map(b => ({
         start: b.start ? new Date(b.start) : null,
         end: b.end ? new Date(b.end) : null,
@@ -345,13 +349,33 @@ export const manualAttendance = async (req, res) => {
       })).filter(b => b.start && b.end), // Only add valid breaks
     };
 
+    // Correctly handle timezones for manual entry
+    if (checkIn) {
+      updateData.checkIn = moment.tz(checkIn, "Asia/Kolkata").toDate();
+      updateData.login = moment(updateData.checkIn).tz("Asia/Kolkata").format("HH:mm");
+    }
+
+    // Handle checkOut field carefully to avoid breaking auto-checkout
+    if (checkOut) {
+      updateData.checkOut = moment.tz(checkOut, "Asia/Kolkata").toDate();
+      updateData.logout = moment(updateData.checkOut).tz("Asia/Kolkata").format("HH:mm");
+    } else if (checkOut === null || checkOut === '') {
+      updateData.checkOut = null;
+      updateData.logout = null;
+    }
+
     // Calculate totalHours if both checkIn and checkOut are provided
+    // Calculate totalHours ONLY if both checkIn and checkOut are provided.
+    // Otherwise, do not set it, so it doesn't default to 0 and overwrite existing values.
     if (updateData.checkIn && updateData.checkOut) {
       const totalWorkMs = updateData.checkOut.getTime() - updateData.checkIn.getTime();
 
       let breakMs = 0;
       if (updateData.breaks.length > 0) {
         breakMs = updateData.breaks.reduce((acc, b) => acc + (b.end.getTime() - b.start.getTime()), 0);
+        breakMs = updateData.breaks.reduce((acc, b) => {
+          return acc + (new Date(b.end).getTime() - new Date(b.start).getTime());
+        }, 0);
       }
 
       const netWorkMs = totalWorkMs - breakMs;
@@ -360,6 +384,10 @@ export const manualAttendance = async (req, res) => {
       updateData.totalHours = 0;
     }
 
+    // If checkIn is present but checkOut is not, we should not set totalHours.
+    if (updateData.checkIn && !updateData.checkOut) {
+      delete updateData.totalHours;
+    }
     // Use findOneAndUpdate with upsert to create or update the record
     const attendanceRecord = await Attendance.findOneAndUpdate(
       { user: userId, date: dateOnly },
@@ -382,20 +410,19 @@ export const getAllAttendance = async (req, res) => {
 
     let adminIds = [];
 
-    // ⭐ MAIN ADMIN → खुद + उसके sub-admins
     if (isMainAdmin) {
       const subAdmins = await Admin.find({ createdBy: userId }).select("_id");
       adminIds = [userId, ...subAdmins.map(a => a._id)];
     }
 
-    // ⭐ HR / MANAGER → उनके parent admin + उसके team admins
+
     else if (["hr", "manager"].includes(role)) {
       const creatorAdmin = await Admin.findById(req.user.createdBy);
       const orgAdminIds = await Admin.find({ createdBy: creatorAdmin._id }).select("_id");
       adminIds = [creatorAdmin._id, ...orgAdminIds.map(a => a._id)];
     }
 
-    // ⭐ Normal Admin → सिर्फ उसका खुद का created users
+    
     else {
       adminIds = [userId];
     }
@@ -453,7 +480,7 @@ export const getAttendanceSummary = async (req, res) => {
     const halfDay = attendance.filter(a => a.status === "Half Day").length;
     const absent = totalEmployees - attendance.length;
 
-    res.json({ total: totalEmployees, onTime,halfDay, late, absent });
+    res.json({ total: totalEmployees, onTime, halfDay, late, absent });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
@@ -787,5 +814,130 @@ export const endBreak = async (req, res) => {
   } catch (err) {
     console.error("endBreak error:", err);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+const calculateTotalBreak = (breaks = []) => {
+  if (!Array.isArray(breaks) || breaks.length === 0) return "-";
+  let totalMs = 0;
+
+  breaks.forEach(b => {
+    if (b.start && b.end) {
+      const start = new Date(b.start);
+      const end = new Date(b.end);
+      if (end > start) totalMs += (end - start);
+    }
+  });
+
+  const minutes = Math.floor(totalMs / 60000);
+  return minutes > 0 ? `${minutes} min` : "-";
+};
+
+export const getEmployeeMonthlyAttendance = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const { month } = req.query; 
+
+    if (!month) {
+      return res.status(400).json({ message: "Month is required" });
+    }
+
+    const monthStart = moment(month).startOf("month");
+    const monthEnd = moment(month).endOf("month");
+    const today = moment().startOf("day");
+
+    // 🔹 Fetch attendance records of month
+    const records = await Attendance.find({
+      user: employeeId,
+      date: {
+        $gte: monthStart.toDate(),
+        $lte: monthEnd.toDate()
+      }
+    });
+
+    // 🔹 Map records by date (YYYY-MM-DD)
+    const recordMap = new Map();
+    records.forEach(r => {
+      recordMap.set(moment(r.date).format("YYYY-MM-DD"), r);
+    });
+
+    const result = [];
+    let current = monthStart.clone();
+
+    // 🔥 LOOP FROM 1st DAY → LAST DAY (FIXED)
+    while (current.isSameOrBefore(monthEnd, "day")) {
+      const dateKey = current.format("YYYY-MM-DD");
+      const record = recordMap.get(dateKey);
+      const isSunday = current.day() === 0;
+      const isFuture = current.isAfter(today, "day");
+
+      // ✅ FUTURE DATE → BLANK ONLY
+      if (isFuture) {
+        result.push({
+          date: current.toDate(),
+          day: current.format("dddd"),
+          status: "",
+          checkIn: null,
+          checkOut: null,
+          totalBreakTime: "",
+          totalWorkTime: ""
+        });
+      }
+
+      // ✅ ATTENDANCE EXISTS
+      else if (record) {
+        let totalWorkTime = "-";
+        if (record.checkIn && record.checkOut) {
+          const diff = new Date(record.checkOut) - new Date(record.checkIn);
+          const mins = Math.floor(diff / 60000);
+          const hrs = Math.floor(mins / 60);
+          totalWorkTime = hrs > 0 ? `${hrs}h ${mins % 60}m` : `${mins}m`;
+        }
+
+        result.push({
+          date: current.toDate(),
+          day: current.format("dddd"),
+          status: record.status,
+          checkIn: record.checkIn,
+          checkOut: record.checkOut,
+          totalBreakTime: calculateTotalBreak(record.breaks),
+          totalWorkTime
+        });
+      }
+
+      // ✅ SUNDAY (PAST / TODAY ONLY)
+      else if (isSunday) {
+        result.push({
+          date: current.toDate(),
+          day: "Sunday",
+          status: "Sunday",
+          checkIn: null,
+          checkOut: null,
+          totalBreakTime: "-",
+          totalWorkTime: "-"
+        });
+      }
+
+      // ✅ ABSENT (PAST / TODAY ONLY)
+      else {
+        result.push({
+          date: current.toDate(),
+          day: current.format("dddd"),
+          status: "Absent",
+          checkIn: null,
+          checkOut: null,
+          totalBreakTime: "-",
+          totalWorkTime: "-"
+        });
+      }
+
+      current.add(1, "day");
+    }
+
+    res.status(200).json(result);
+
+  } catch (error) {
+    console.error("Monthly attendance error:", error);
+    res.status(500).json({ message: "Failed to fetch monthly attendance" });
   }
 };
