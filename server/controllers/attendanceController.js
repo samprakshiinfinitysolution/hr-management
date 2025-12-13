@@ -364,24 +364,26 @@ export const manualAttendance = async (req, res) => {
       updateData.logout = null;
     }
 
-    // Calculate totalHours if both checkIn and checkOut are provided
-    // Calculate totalHours ONLY if both checkIn and checkOut are provided.
-    // Otherwise, do not set it, so it doesn't default to 0 and overwrite existing values.
+  
+    // ✅ CALCULATE totalHours SAFELY (DO NOT OVERWRITE)
     if (updateData.checkIn && updateData.checkOut) {
       const totalWorkMs = updateData.checkOut.getTime() - updateData.checkIn.getTime();
 
       let breakMs = 0;
       if (updateData.breaks.length > 0) {
-        breakMs = updateData.breaks.reduce((acc, b) => acc + (b.end.getTime() - b.start.getTime()), 0);
-        breakMs = updateData.breaks.reduce((acc, b) => {
-          return acc + (new Date(b.end).getTime() - new Date(b.start).getTime());
-        }, 0);
+        breakMs = updateData.breaks.reduce(
+          (acc, b) => acc + (b.end.getTime() - b.start.getTime()),
+          0
+        );
       }
 
       const netWorkMs = totalWorkMs - breakMs;
-      updateData.totalHours = Math.max(0, Math.round((netWorkMs / (1000 * 60 * 60)) * 100) / 100);
+
+      updateData.totalHours =
+        Math.max(0, Math.round((netWorkMs / (1000 * 60 * 60)) * 100) / 100);
     } else {
-      updateData.totalHours = 0;
+      // ❗ VERY IMPORTANT — prevents employee-side overwrite
+      delete updateData.totalHours;
     }
 
     // If checkIn is present but checkOut is not, we should not set totalHours.
@@ -422,7 +424,7 @@ export const getAllAttendance = async (req, res) => {
       adminIds = [creatorAdmin._id, ...orgAdminIds.map(a => a._id)];
     }
 
-    
+
     else {
       adminIds = [userId];
     }
@@ -836,7 +838,7 @@ const calculateTotalBreak = (breaks = []) => {
 export const getEmployeeMonthlyAttendance = async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const { month } = req.query; 
+    const { month } = req.query;
 
     if (!month) {
       return res.status(400).json({ message: "Month is required" });
