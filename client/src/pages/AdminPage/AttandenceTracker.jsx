@@ -5,7 +5,7 @@ import API from "../../utils/api";
 import { Close, Email, Phone, Visibility, CalendarMonth, People, CheckCircle, Cancel, AccessTime, EditCalendar } from "@mui/icons-material";
 import { Download } from 'lucide-react'; // Import Download icon
 import { toast, Toaster } from "react-hot-toast";
-import dayjs from "dayjs"; 
+import dayjs from "dayjs";
 
 // Reusable Table Component
 const AttendanceTable = ({ records, loading, userType, onNameClick, onActionClick }) => {
@@ -383,8 +383,9 @@ const AttendanceTracker = () => {
 
     // build breaks array: only include valid rows (both start and end)
     const payloadBreaks = (manualEntryData.breaks || []).map(b => {
-      const start = b.start ? `${date}T${b.start}:00` : null;
-      const end = b.end ? `${date}T${b.end}:00` : null;
+      const start = b.start ? `${date}T${b.start}:00+05:30` : null;
+      const end = b.end ? `${date}T${b.end}:00+05:30` : null;
+
       return { start, end };
     }).filter(b => b.start && b.end);
 
@@ -393,8 +394,14 @@ const AttendanceTracker = () => {
       date: date,
       status: manualEntryData.status,
       remark: manualEntryData.remark || `Manually set to ${manualEntryData.status} by admin`,
-      checkIn: manualEntryData.checkIn ? `${date}T${manualEntryData.checkIn}:00` : null,
-      checkOut: manualEntryData.checkOut ? `${date}T${manualEntryData.checkOut}:00` : null,
+      checkIn: manualEntryData.checkIn
+        ? `${date}T${manualEntryData.checkIn}:00+05:30`
+        : null,
+
+      checkOut: manualEntryData.checkOut
+        ? `${date}T${manualEntryData.checkOut}:00+05:30`
+        : null,
+
       breaks: payloadBreaks
     };
 
@@ -691,108 +698,108 @@ const AttendanceTracker = () => {
           { title: "Half Days", value: summary.halfDay, icon: <CalendarMonth className="text-indigo-500" /> },
         ];
 
-      return (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white text-black dark:bg-gray-800 rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6">
+        return (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white text-black dark:bg-gray-800 rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6">
 
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">
-                Monthly Attendance – {selectedEmployee.name}
-              </h2>
-              <button onClick={() => setSelectedEmployee(null)} className='hover:text-red-700 text-gray-400 '>
-                <Close />
-              </button>
-            </div>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">
+                  Monthly Attendance – {selectedEmployee.name}
+                </h2>
+                <button onClick={() => setSelectedEmployee(null)} className='hover:text-red-700 text-gray-400 '>
+                  <Close />
+                </button>
+              </div>
 
-            {monthLoading ? (
-              <p>Loading...</p>
-            ) : monthlyAttendance.length === 0 ? (
-              <p className="text-center text-gray-500">No records found</p>
-            ) : (
-              <>
-                {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                  {summaryCards.map((card, index) => (
-                    <div key={index} className="shadow-sm rounded-lg p-3 flex items-center gap-3 border">
-                      <div>{card.icon}</div>
-                      <div>
-                        <h3 className="text-xs font-medium">{card.title}</h3>
-                        <p className="text-xl font-semibold">{card.value}</p>
+              {monthLoading ? (
+                <p>Loading...</p>
+              ) : monthlyAttendance.length === 0 ? (
+                <p className="text-center text-gray-500">No records found</p>
+              ) : (
+                <>
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    {summaryCards.map((card, index) => (
+                      <div key={index} className="shadow-sm rounded-lg p-3 flex items-center gap-3 border">
+                        <div>{card.icon}</div>
+                        <div>
+                          <h3 className="text-xs font-medium">{card.title}</h3>
+                          <p className="text-xl font-semibold">{card.value}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
 
-              <table className="w-full border">
-                <thead className="bg-gray-200">
-                  <tr>
-                    <th className="p-2 text-left">Date</th>
-                    <th>Day</th>
-                    <th>Status</th>
-                    <th>Check-In</th>
-                    <th>Check-Out</th>
-                    <th>Break Time</th>
-                    <th>Work Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-  {monthlyAttendance.map((day, i) => (
-    <tr
-      key={i}
-      className={`border-t ${getRowBgColor(day.status)}`}
-    >
-      {/* Date */}
-      <td className="p-2">
-        {dayjs(day.date).format("DD MMM YYYY")}
-      </td>
+                  <table className="w-full border">
+                    <thead className="bg-gray-200">
+                      <tr>
+                        <th className="p-2 text-left">Date</th>
+                        <th>Day</th>
+                        <th>Status</th>
+                        <th>Check-In</th>
+                        <th>Check-Out</th>
+                        <th>Break Time</th>
+                        <th>Work Time</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {monthlyAttendance.map((day, i) => (
+                        <tr
+                          key={i}
+                          className={`border-t ${getRowBgColor(day.status)}`}
+                        >
+                          {/* Date */}
+                          <td className="p-2">
+                            {dayjs(day.date).format("DD MMM YYYY")}
+                          </td>
 
-      {/* Day */}
-      <td className="p-2">
-        {day.day}
-      </td>
+                          {/* Day */}
+                          <td className="p-2">
+                            {day.day}
+                          </td>
 
-      {/* Status */}
-      <td className="p-2">
-        {day.status ? (
-          <span
-            className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(day.status)}`}
-          >
-            {day.status}
-          </span>
-        ) : (
-          <span className="text-gray-400">—</span> // ✅ Future day blank
-        )}
-      </td>
+                          {/* Status */}
+                          <td className="p-2">
+                            {day.status ? (
+                              <span
+                                className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(day.status)}`}
+                              >
+                                {day.status}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span> // ✅ Future day blank
+                            )}
+                          </td>
 
-      {/* Check-in */}
-      <td className="p-2">
-        {day.checkIn ? dayjs(day.checkIn).format("HH:mm") : "-"}
-      </td>
+                          {/* Check-in */}
+                          <td className="p-2">
+                            {day.checkIn ? dayjs(day.checkIn).format("HH:mm") : "-"}
+                          </td>
 
-      {/* Check-out */}
-      <td className="p-2">
-        {day.checkOut ? dayjs(day.checkOut).format("HH:mm") : "-"}
-      </td>
+                          {/* Check-out */}
+                          <td className="p-2">
+                            {day.checkOut ? dayjs(day.checkOut).format("HH:mm") : "-"}
+                          </td>
 
-      {/* Break */}
-      <td className="p-2">
-        {day.totalBreakTime || "-"}
-      </td>
+                          {/* Break */}
+                          <td className="p-2">
+                            {day.totalBreakTime || "-"}
+                          </td>
 
-      {/* Work Time */}
-      <td className="p-2">
-        {day.totalWorkTime || "-"}
-      </td>
-    </tr>
-  ))}
-</tbody>
+                          {/* Work Time */}
+                          <td className="p-2">
+                            {day.totalWorkTime || "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
 
-              </table>
-              </>
-            )}
+                  </table>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      );
+        );
       })()}
 
       {/* Manual Attendance Entry Modal (Scrollable + Multiple Breaks) */}
