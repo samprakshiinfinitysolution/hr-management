@@ -16,6 +16,7 @@ import {
   startBreak,
   endBreak,
   manualAttendance,
+  getEmployeeMonthlyAttendance,
 } from "../controllers/attendanceController.js";
 
 const router = express.Router();
@@ -31,6 +32,12 @@ router.get("/summary", verifyToken, allowAdminHrManager, getAttendanceSummary);
 router.get("/", verifyToken, allowAdminHrManager, getAttendance);
 router.post("/manual", verifyToken, allowAdminHrManager, manualAttendance);
 
+// ✅ Monthly attendance
+router.get(
+  "/employee/:employeeId/monthly",
+  verifyToken, allowAdminHrManager,
+  getEmployeeMonthlyAttendance
+);
 // New Routes for Admin/HR/Manager Attendance
 router.post("/admin/checkin", verifyToken, allowAdminHrManager, adminCheckIn);
 router.post("/admin/checkout", verifyToken, allowAdminHrManager, adminCheckOut);

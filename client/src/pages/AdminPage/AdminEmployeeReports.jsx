@@ -348,13 +348,14 @@ export default function AdminEmpReports() {
     switch (filters.reportType) {
       case "attendance":
       case "hr":
-        headers = ["Name,Email,Date,CheckIn,CheckOut,TotalTime,TotalBreaks,Hours"];
+        headers = ["Name,Email,Date,Day,CheckIn,CheckOut,TotalTime,TotalBreaks,Hours"];
         rows = filtered.map((r) => {
           const date = r.date ? formatDateDDMMYYYY(r.date) : "-";
           const checkIn = r.checkIn ? new Date(r.checkIn).toLocaleTimeString() : "-";
           const checkOut = r.checkOut ? new Date(r.checkOut).toLocaleTimeString() : "-";
           const breakStr = `${r.totalBreaks || 0} (${r.breakFormatted || '0m'})`;
-          return `${r.name},${r.email},${date},${checkIn},${checkOut},${r.totalWorkTime || "-"},${breakStr},${formatHoursToHrsMins(r.totalHours)}`;
+          const day = r.date ? new Date(r.date).toLocaleDateString('en-US', { weekday: 'long' }) : "-";
+          return `${r.name},${r.email},${date},${day},${checkIn},${checkOut},${r.totalWorkTime || "-"},${breakStr},${formatHoursToHrsMins(r.totalHours)}`;
         });
         break;
 
@@ -506,6 +507,7 @@ export default function AdminEmpReports() {
                 {filters.reportType === "attendance" && (
                   <>
                     <th className="p-2 text-left">Date</th>
+                    <th className="p-2 text-left">Day</th>
                     <th className="p-2 text-left">Check In</th>
                     <th className="p-2 text-left">Check Out</th>
                     <th className="p-2 text-left">Total Time</th>
@@ -542,6 +544,7 @@ export default function AdminEmpReports() {
                     {filters.reportType === "attendance" && (
                       <>
                         <td className="p-2">{r.date ? formatDateDDMMYYYY(r.date) : "-"}</td>
+                        <td className="p-2">{r.date ? new Date(r.date).toLocaleDateString('en-US', { weekday: 'long' }) : "-"}</td>
                         <td className="p-2">{r.checkIn ? new Date(r.checkIn).toLocaleTimeString() : "-"}</td>
                         <td className="p-2">{r.checkOut ? new Date(r.checkOut).toLocaleTimeString() : "-"}</td>
 
@@ -578,7 +581,7 @@ export default function AdminEmpReports() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="text-center p-4">
+                  <td colSpan={9} className="text-center p-4">
                     No records match the filters
                   </td>
                 </tr>

@@ -150,6 +150,8 @@ export default function EmpAttendance() {
         formatted.push({ empty: true });
       }
 
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Compare dates only
 
       for (let i = 1; i <= end.getDate(); i++) {
         const currentDate = new Date(start.getFullYear(), start.getMonth(), i);
@@ -158,8 +160,11 @@ export default function EmpAttendance() {
 
         let status = "Holiday"; // Default for Sunday
         const isSunday = currentDate.getDay() === 0;
+        const isFuture = currentDate > today;
 
-        if (!isSunday) {
+        if (isFuture) {
+          status = ""; // Future days should be blank
+        } else if (!isSunday) {
           if (rec) {
             status = rec.status || "Present";
 
@@ -167,7 +172,7 @@ export default function EmpAttendance() {
             else if (status === "Late" || status === "Late Login") sum.late++;
             else if (status === "Half Day") sum.half++;
             else if (status === "Early Checkout") sum.early++;
-          } else {
+          } else if (!isFuture) { // Only mark absent for past/today
             status = "Absent";
             sum.absent++;
           }
@@ -175,6 +180,7 @@ export default function EmpAttendance() {
           status = "Sunday";
         }
 
+        // Always push the day, but status might be empty for future days
         formatted.push({
           date: dayStr,
           status,
